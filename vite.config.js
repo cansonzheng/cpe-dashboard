@@ -51,10 +51,10 @@ export default defineConfig({
     }),
   ],
   server: {
-    host: '127.0.0.1',
+    host: '::',
     port: 5173,
     proxy: {
-      '/api': 'http://127.0.0.1:3100',
+      '/api': 'http://[::1]:3100',
     },
   },
 })

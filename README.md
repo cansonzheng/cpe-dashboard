@@ -49,7 +49,70 @@ COOKIE_SECURE=false
 
 登录保存在签名的 `HttpOnly` Cookie 中，默认有效期为 365 天，并在使用期间自动续期。修改 `APP_PASSWORD` 会使已有登录自动失效。通过 HTTPS 部署时，应将 `COOKIE_SECURE` 设置为 `true`。
 
-浏览器访问 `http://127.0.0.1:5173`。生产模式先执行 `npm run build`，再用相同环境变量执行 `npm start`，访问 `http://127.0.0.1:3100`。
+开发模式可以通过 `http://localhost:5173` 访问。Vite 和 Koa 均固定监听 IPv6 通配地址 `::`，在常见双栈系统上可同时通过 IPv4 和 IPv6 访问，不需要配置 `HOST` 环境变量。`npm start` 可直接运行源码版 Koa 服务；正式部署建议使用下面的自包含 `dist/` 产物。
+
+## 生产构建
+
+项目使用 Vite 8 + Rolldown 构建 Vue PWA，并使用 Rolldown 将 Koa 服务及其运行依赖打包成单个文件：
+
+```bash
+npm run build
+```
+
+命令会重新生成 `dist/`：
+
+```text
+dist/
+  public/            Vue/PWA 静态资源
+  server/index.mjs   自包含的 Koa 服务
+```
+
+`dist/` 只包含实际运行文件，不包含文档、环境变量模板、`package.json` 或 `node_modules`，运行时也不需要执行 `npm install`。可以将整个目录复制到装有 Node.js 22 的环境中直接启动：
+
+```bash
+cd dist
+node server/index.mjs
+```
+
+运行前需要通过环境变量或 `.env` 提供设备及页面登录配置。
+
+## Docker Compose
+
+先在宿主机生成一次自包含产物：
+
+```bash
+npm run build
+docker compose up -d
+```
+
+Compose 使用官方 `node:22-alpine` 镜像，将本地 `dist/` 只读映射到 `/app`，直接运行 `server/index.mjs`，容器启动过程不会执行 `npm install`。
+
+默认映射 `3100:3100`。如需修改宿主机端口，在 `.env` 中设置：
+
+```dotenv
+DASHBOARD_PORT=8080
+```
+
+查看状态和日志：
+
+```bash
+docker compose ps
+docker compose logs -f dashboard
+```
+
+源码更新后重新执行 `npm run build`，再重启容器：
+
+```bash
+docker compose restart dashboard
+```
+
+也可以将 `dist/` 固化进镜像：
+
+```bash
+npm run build
+docker build -t cpe-dashboard .
+docker run --env-file .env -p 3100:3100 cpe-dashboard
+```
 
 本项目自身提供：
 

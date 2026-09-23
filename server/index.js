@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Koa from 'koa'
@@ -96,13 +97,19 @@ router.get('/sms', auth.requireAuth, async (ctx) => {
 app.use(router.routes())
 app.use(router.allowedMethods())
 
-const distPath = path.resolve(__dirname, '../dist')
-app.use(serve(distPath))
+const adjacentPublicPath = path.resolve(__dirname, '../public')
+const sourcePublicPath = path.resolve(__dirname, '../dist/public')
+const publicPath = process.env.PUBLIC_DIR || (
+  existsSync(path.join(adjacentPublicPath, 'index.html'))
+    ? adjacentPublicPath
+    : sourcePublicPath
+)
+app.use(serve(publicPath))
 
-const port = Number(process.env.PORT || 3100)
-const host = process.env.HOST || '127.0.0.1'
+const port = Number(process.env.PORT || 3000)
+const host = '::'
 const server = app.listen(port, host, () => {
-  console.log(`cpe-dashboard 已启动：http://${host}:${port}`)
+  console.log(`cpe-dashboard 已启动：http://[${host}]:${port}`)
 })
 
 async function shutdown() {

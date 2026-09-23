@@ -1,0 +1,17 @@
+services:
+  dashboard:
+    image: node:22-alpine
+    container_name: cpe-dashboard
+    working_dir: /app
+    command: ["node", "server/index.mjs"]
+    environment:
+      NODE_ENV: production
+      PORT: 23310
+      CPE_BASE_URL: http://192.168.21.1
+      CPE_USERNAME: user
+      CPE_PASSWORD: jHPDeP7M
+      APP_PASSWORD: K7mQ2vN9pR4xT8cL6w
+    network_mode: "host"
+    volumes:
+      - ./dist:/app:ro
+    restart: unless-stopped

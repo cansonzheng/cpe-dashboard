@@ -26,12 +26,15 @@ src/
   styles.css           Global and responsive styles
 index.html              Vite HTML entry point
 vite.config.js          Vite configuration and development proxy
+scripts/build-release.mjs  Vite/Rolldown self-contained dist builder
+docker-compose.yml      Runs the prebuilt release without installing packages
+Dockerfile              Optional image for embedding the prebuilt release
 .env.example            Environment variable template
 README.md               User-facing setup and API documentation
 ```
 
 Generated output and installed dependencies are in `dist/` and `node_modules/`.
-Do not edit either directory by hand.
+Do not edit these directories by hand.
 
 ## Setup and commands
 
@@ -46,7 +49,8 @@ Useful commands:
 
 ```bash
 npm test          # Run Node.js unit tests
-npm run build     # Build the Vue production bundle
+npm run build     # Build the self-contained dist/ directory with Rolldown
+npm run build:web # Build only the Vue/PWA frontend
 npm start         # Serve the built frontend and Koa API on PORT
 ```
 
@@ -72,9 +76,12 @@ APP_PASSWORD=replace-with-page-password
 Optional server settings:
 
 ```dotenv
-HOST=127.0.0.1
 PORT=3100
 ```
+
+The Koa and Vite servers bind to the IPv6 unspecified address `::` in code.
+Do not add a `HOST` environment variable; this default provides IPv6 and, on
+normal dual-stack hosts, IPv4 access as well.
 
 Rules:
 
@@ -176,6 +183,12 @@ After frontend, dependency, or build configuration changes, run:
 ```bash
 npm run build
 ```
+
+The production artifact must remain self-contained and minimal: `dist/`
+contains only `public/` and `server/index.mjs`. It must run with Node.js 22
+without `node_modules` or `npm install`. Do not copy documentation, environment
+templates, or package metadata into it. Docker Compose mounts it read-only and
+executes the bundled server.
 
 Before handing off a change that touches both layers, run both commands.
 
