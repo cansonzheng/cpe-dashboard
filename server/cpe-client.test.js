@@ -53,3 +53,60 @@ test('SMS mutations use the original device command payloads', async () => {
     { cmd: 14, index: 'DELETE ALL', subcmd: 0, method: 'POST' },
   ])
 })
+
+for (const code of ['NO_AUTH', 'LOGIN_TIMEOUT']) {
+  test(`authenticated requests renew the session once after ${code}`, async () => {
+    const client = Object.create(CpeClient.prototype)
+    const payloads = []
+    let loginCount = 0
+    client.sessionId = 'expired-session'
+    client.loginPromise = null
+    client.login = async () => {
+      loginCount += 1
+      client.sessionId = 'renewed-session'
+    }
+    client.request = async (payload) => {
+      payloads.push(payload)
+      if (payloads.length === 1) {
+        const error = new Error(code)
+        error.code = code
+        throw error
+      }
+      return { success: true }
+    }
+
+    const result = await client.authenticatedRequest({ cmd: 12, method: 'GET' })
+
+    assert.deepEqual(result, { success: true })
+    assert.equal(loginCount, 1)
+    assert.deepEqual(payloads, [
+      { cmd: 12, method: 'GET', sessionId: 'expired-session' },
+      { cmd: 12, method: 'GET', sessionId: 'renewed-session' },
+    ])
+  })
+}
+
+test('authenticated requests do not retry a renewed session twice', async () => {
+  const client = Object.create(CpeClient.prototype)
+  let requestCount = 0
+  let loginCount = 0
+  client.sessionId = 'expired-session'
+  client.loginPromise = null
+  client.login = async () => {
+    loginCount += 1
+    client.sessionId = 'renewed-session'
+  }
+  client.request = async () => {
+    requestCount += 1
+    const error = new Error('LOGIN_TIMEOUT')
+    error.code = 'LOGIN_TIMEOUT'
+    throw error
+  }
+
+  await assert.rejects(
+    client.authenticatedRequest({ cmd: 12, method: 'GET' }),
+    { code: 'LOGIN_TIMEOUT' },
+  )
+  assert.equal(loginCount, 1)
+  assert.equal(requestCount, 2)
+})

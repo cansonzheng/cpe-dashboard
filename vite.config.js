@@ -4,7 +4,13 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   plugins: [
-    vue(),
+    vue({
+      template: {
+        compilerOptions: {
+          isCustomElement: (tag) => tag.startsWith('mdui-'),
+        },
+      },
+    }),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'pwa-192.png', 'pwa-512.png', 'pwa-maskable-512.png'],
@@ -12,8 +18,8 @@ export default defineConfig({
         name: 'CPE Dashboard',
         short_name: 'CPE Dashboard',
         description: '用于管理 CPE 设备的轻量控制面板',
-        theme_color: '#1d4a3a',
-        background_color: '#f4f1eb',
+        theme_color: '#006874',
+        background_color: '#f5faf9',
         display: 'standalone',
         start_url: '/',
         scope: '/',

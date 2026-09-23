@@ -9,6 +9,8 @@ const COMMANDS = Object.freeze({
   GET_NEXT_LOGIN_TIME: 232,
 })
 
+const SESSION_EXPIRED_CODES = new Set(['NO_AUTH', 'LOGIN_TIMEOUT'])
+
 function md5(value) {
   return crypto.createHash('md5').update(value).digest('hex')
 }
@@ -54,6 +56,7 @@ export class CpeClient {
     this.timeout = timeout
     this.sessionId = ''
     this.token = ''
+    this.loginPromise = null
   }
 
   async request(payload) {
@@ -72,7 +75,7 @@ export class CpeClient {
     if (!data.success) {
       const reason = data.message || data.login_fail || data.login_fail2 || '未知错误'
       const error = new Error(`设备请求失败：${reason}`)
-      error.code = data.message
+      error.code = String(reason)
       throw error
     }
     return data
@@ -107,17 +110,27 @@ export class CpeClient {
   }
 
   async ensureLogin() {
-    if (!this.sessionId) await this.login()
+    if (this.sessionId) return
+    if (!this.loginPromise) {
+      this.loginPromise = this.login().finally(() => {
+        this.loginPromise = null
+      })
+    }
+    await this.loginPromise
   }
 
   async authenticatedRequest(payload) {
     await this.ensureLogin()
+    const attemptedSessionId = this.sessionId
     try {
-      return await this.request({ ...payload, sessionId: this.sessionId })
+      return await this.request({ ...payload, sessionId: attemptedSessionId })
     } catch (error) {
-      if (error.code !== 'NO_AUTH') throw error
-      this.sessionId = ''
-      await this.login()
+      const code = String(error.code || '').trim().toUpperCase()
+      if (!SESSION_EXPIRED_CODES.has(code)) throw error
+
+      // Do not discard a session that another concurrent request already renewed.
+      if (this.sessionId === attemptedSessionId) this.sessionId = ''
+      await this.ensureLogin()
       return this.request({ ...payload, sessionId: this.sessionId })
     }
   }

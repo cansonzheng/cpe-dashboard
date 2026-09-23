@@ -144,7 +144,8 @@ Authentication rules:
 - Fetch command `232` before login.
 - Send the password as `SHA-256(token + plaintextPassword)`.
 - Use the session ID returned by command `100` for authenticated requests.
-- Retry an authenticated request once after `NO_AUTH` by creating a new session.
+- Retry an authenticated request once after `NO_AUTH` or `LOGIN_TIMEOUT` by
+  creating a new session.
 - Do not repeatedly retry failed credentials; the device may enforce lockouts.
 
 Inbox rules:
@@ -176,6 +177,19 @@ messageId readFlag sender YYYY/MM/DD HH:mm:ss messageBody
 - Avoid external runtime assets; the UI should work on an isolated LAN.
 - Do not add a state library for the current single-page view unless complexity
   clearly requires it.
+
+## UI library
+
+- Use MDUI 2 for frontend controls and follow its Material Design 3 patterns.
+- The MDUI AI documentation index is
+  `https://www.mdui.org/zh-cn/docs/2/llms.txt`; consult it before adding or
+  changing MDUI components.
+- Keep MDUI installed through npm and bundled locally. Do not use CDN assets,
+  because the dashboard must work on an isolated LAN.
+- Use `#006874` as the theme seed color through MDUI's `setColorScheme` API.
+- Keep Vite configured to treat tags beginning with `mdui-` as custom elements.
+- MDUI components are Web Components. In Vue templates, synchronize values and
+  events explicitly instead of relying on `v-model`.
 
 ## Testing and verification
 

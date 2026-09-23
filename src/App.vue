@@ -1,5 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { confirm as confirmDialog } from 'mdui/functions/confirm.js'
+import { snackbar } from 'mdui/functions/snackbar.js'
 
 const AUTH_HINT_KEY = 'cpe-dashboard-authenticated'
 
@@ -22,6 +24,7 @@ const loading = ref(false)
 const error = ref('')
 const refreshedAt = ref('')
 const selected = ref(null)
+const messageDialogOpen = ref(false)
 const authChecking = ref(hasAuthHint)
 const authenticated = ref(hasAuthHint)
 const password = ref('')
@@ -29,7 +32,6 @@ const authError = ref('')
 const authLoading = ref(false)
 const selectedIds = ref([])
 const actionLoading = ref(false)
-const feedback = ref('')
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const allPageSelected = computed(() => (
@@ -129,6 +131,7 @@ async function logout() {
   await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
   setAuthenticated(false)
   messages.value = []
+  messageDialogOpen.value = false
   selected.value = null
   error.value = ''
   selectedIds.value = []
@@ -144,10 +147,23 @@ async function postAction(url, body) {
 }
 
 function showFeedback(message) {
-  feedback.value = message
-  window.setTimeout(() => {
-    if (feedback.value === message) feedback.value = ''
-  }, 3000)
+  snackbar({ message, placement: 'bottom' })
+}
+
+async function askForConfirmation(headline, description) {
+  try {
+    await confirmDialog({
+      headline,
+      description,
+      confirmText: '确认',
+      cancelText: '取消',
+      closeOnEsc: true,
+      queue: 'sms-actions',
+    })
+    return true
+  } catch {
+    return false
+  }
 }
 
 function toggleSelection(id) {
@@ -164,6 +180,7 @@ function togglePageSelection() {
 
 async function openMessage(message) {
   selected.value = message
+  messageDialogOpen.value = true
   if (message.read) return
 
   message.read = true
@@ -175,6 +192,14 @@ async function openMessage(message) {
     unread.value += 1
     error.value = `标记已读失败：${cause.message}`
   }
+}
+
+function closeMessageDialog() {
+  messageDialogOpen.value = false
+}
+
+function finishClosingMessageDialog() {
+  selected.value = null
 }
 
 async function markAllRead() {
@@ -194,14 +219,16 @@ async function markAllRead() {
 
 async function deleteMessages(ids) {
   if (!ids.length) return
-  const prompt = ids.length === 1 ? '确定删除这条短信吗？' : `确定删除选中的 ${ids.length} 条短信吗？`
-  if (!window.confirm(prompt)) return
+  const description = ids.length === 1
+    ? '删除后将无法恢复。'
+    : `将删除选中的 ${ids.length} 条短信，删除后无法恢复。`
+  if (!await askForConfirmation('删除短信？', description)) return
 
   actionLoading.value = true
   error.value = ''
   try {
     await postAction('/api/sms/delete', { ids })
-    if (selected.value && ids.includes(selected.value.id)) selected.value = null
+    if (selected.value && ids.includes(selected.value.id)) closeMessageDialog()
     const remainingTotal = Math.max(0, total.value - ids.length)
     const targetPage = Math.min(page.value, Math.max(1, Math.ceil(remainingTotal / pageSize.value)))
     await loadMessages(targetPage)
@@ -214,13 +241,13 @@ async function deleteMessages(ids) {
 }
 
 async function clearInbox() {
-  if (!window.confirm(`确定清空收件箱中的 ${total.value} 条短信吗？此操作无法撤销。`)) return
+  if (!await askForConfirmation('清空收件箱？', `将删除收件箱中的 ${total.value} 条短信，此操作无法撤销。`)) return
 
   actionLoading.value = true
   error.value = ''
   try {
     await postAction('/api/sms/clear')
-    selected.value = null
+    closeMessageDialog()
     await loadMessages(1)
     showFeedback('收件箱已清空')
   } catch (cause) {
@@ -240,27 +267,40 @@ onMounted(checkSession)
 
 <template>
   <main v-if="authChecking && !authenticated" class="auth-screen">
-    <div class="auth-card auth-loading-card">
+    <mdui-card variant="elevated" class="auth-card auth-loading-card">
       <span class="brand-mark" aria-hidden="true">C</span>
+      <mdui-circular-progress></mdui-circular-progress>
       <p>正在检查登录状态…</p>
-    </div>
+    </mdui-card>
   </main>
 
   <main v-else-if="!authenticated" class="auth-screen">
-    <form class="auth-card" @submit.prevent="login">
-      <span class="brand-mark auth-logo" aria-hidden="true">C</span>
-      <p class="eyebrow">CPE DASHBOARD</p>
-      <h1>欢迎回来</h1>
-      <p class="auth-description">输入访问密码以进入设备管理面板。</p>
+    <mdui-card variant="elevated" class="auth-card">
+      <form @submit.prevent="login">
+        <span class="brand-mark auth-logo" aria-hidden="true">C</span>
+        <p class="eyebrow">CPE DASHBOARD</p>
+        <h1>欢迎回来</h1>
+        <p class="auth-description">输入访问密码以进入设备管理面板。</p>
 
-      <label for="password">访问密码</label>
-      <input id="password" v-model="password" type="password" autocomplete="current-password" autofocus placeholder="请输入密码" required />
-      <p v-if="authError" class="auth-error">{{ authError }}</p>
-      <button class="login-button" type="submit" :disabled="authLoading || !password">
-        {{ authLoading ? '正在登录…' : '进入控制台' }}
-      </button>
-      <small>登录状态将在此设备上长期保持</small>
-    </form>
+        <mdui-text-field
+          id="password"
+          variant="outlined"
+          label="访问密码"
+          type="password"
+          autocomplete="current-password"
+          :value="password"
+          :disabled="authLoading"
+          required
+          autofocus
+          @input="password = $event.target.value"
+        ></mdui-text-field>
+        <p v-if="authError" class="auth-error">{{ authError }}</p>
+        <mdui-button class="login-button" type="submit" variant="filled" full-width :loading="authLoading" :disabled="!password">
+          {{ authLoading ? '正在登录…' : '进入控制台' }}
+        </mdui-button>
+        <small>登录状态将在此设备上长期保持</small>
+      </form>
+    </mdui-card>
   </main>
 
   <main v-else class="shell">
@@ -273,79 +313,79 @@ onMounted(checkSession)
         </div>
       </div>
       <div class="top-actions">
-        <button class="quiet-button" @click="logout">退出</button>
-        <button class="refresh" :disabled="loading" @click="loadMessages(page)">
-          <span :class="{ spinning: loading }">↻</span>
+        <mdui-button variant="text" @click="logout">退出</mdui-button>
+        <mdui-button variant="tonal" :loading="loading" :disabled="loading" @click="loadMessages(page)">
           {{ loading ? '读取中' : '刷新' }}
-        </button>
+        </mdui-button>
       </div>
     </header>
 
     <section class="summary" aria-label="收件箱概览">
-      <div>
+      <mdui-card variant="filled" class="summary-card">
         <span class="summary-value">{{ total }}</span>
         <span class="summary-label">全部短信</span>
-      </div>
-      <div>
+      </mdui-card>
+      <mdui-card variant="filled" class="summary-card">
         <span class="summary-value accent">{{ unread }}</span>
         <span class="summary-label">未读</span>
-      </div>
-      <p class="sync-time">
-        <span class="status-dot"></span>
-        {{ refreshedAt ? `最后同步 ${refreshedAt}` : '正在连接设备' }}
-      </p>
+      </mdui-card>
+      <mdui-card variant="filled" class="sync-card">
+        <p class="sync-time">
+          <span class="status-dot"></span>
+          {{ refreshedAt ? `最后同步 ${refreshedAt}` : '正在连接设备' }}
+        </p>
+      </mdui-card>
     </section>
 
-    <div v-if="error" class="notice error-notice">
-      <strong>无法读取收件箱</strong>
-      <span>{{ error }}</span>
-      <button @click="loadMessages(page)">重试</button>
-    </div>
-
-    <div v-if="feedback" class="notice success-notice">
-      <strong>操作成功</strong>
-      <span>{{ feedback }}</span>
-    </div>
+    <mdui-card v-if="error" variant="filled" class="notice error-notice">
+      <div>
+        <strong>操作遇到问题</strong>
+        <span>{{ error }}</span>
+      </div>
+      <mdui-button variant="text" @click="loadMessages(page)">重试</mdui-button>
+    </mdui-card>
 
     <section class="inbox-toolbar" aria-label="短信操作">
       <div>
-        <button
-          class="toolbar-button"
+        <mdui-button
+          variant="tonal"
           :disabled="actionLoading || unread === 0"
           @click="markAllRead"
         >
           全部已读
-        </button>
-        <span v-if="selectedIds.length" class="selection-count">已选 {{ selectedIds.length }} 条</span>
+        </mdui-button>
+        <mdui-badge v-if="selectedIds.length" variant="large">已选 {{ selectedIds.length }} 条</mdui-badge>
       </div>
       <div>
-        <button
-          class="toolbar-button danger-button"
+        <mdui-button
+          class="danger-action"
+          variant="outlined"
           :disabled="actionLoading || selectedIds.length === 0"
           @click="deleteMessages(selectedIds)"
         >
           删除所选
-        </button>
-        <button
-          class="toolbar-button danger-button subtle-danger"
+        </mdui-button>
+        <mdui-button
+          class="danger-action"
+          variant="text"
           :disabled="actionLoading || total === 0"
           @click="clearInbox"
         >
           清空收件箱
-        </button>
+        </mdui-button>
       </div>
     </section>
 
-    <section class="inbox" :class="{ muted: loading || actionLoading }">
+    <mdui-card variant="outlined" class="inbox" :class="{ muted: loading || actionLoading }">
+      <mdui-linear-progress v-if="loading || actionLoading"></mdui-linear-progress>
       <div class="inbox-head">
         <label class="check-cell" title="选择本页全部短信">
-          <input
-            type="checkbox"
+          <mdui-checkbox
             :checked="allPageSelected"
             :disabled="messages.length === 0"
             aria-label="选择本页全部短信"
             @change="togglePageSelection"
-          />
+          ></mdui-checkbox>
         </label>
         <span>发件人</span>
         <span>短信内容</span>
@@ -354,57 +394,58 @@ onMounted(checkSession)
 
       <div v-for="message in messages" :key="message.id" class="message-row" :class="{ unread: !message.read }">
         <label class="check-cell">
-          <input
-            type="checkbox"
+          <mdui-checkbox
             :checked="selectedIds.includes(message.id)"
             :aria-label="`选择短信 ${message.id}`"
             @change="toggleSelection(message.id)"
-          />
+          ></mdui-checkbox>
         </label>
-        <button class="message-open" @click="openMessage(message)">
+        <mdui-card variant="filled" class="message-open" @click="openMessage(message)">
           <span class="sender-cell">
-            <span class="avatar">{{ senderLabel(message.sender).slice(0, 1) }}</span>
+            <mdui-avatar>{{ senderLabel(message.sender).slice(0, 1) }}</mdui-avatar>
             <span>
               <strong>{{ senderLabel(message.sender) }}</strong>
               <small>{{ message.sender }}</small>
             </span>
           </span>
           <span class="content-cell">
-            <i v-if="!message.read">未读</i>
+            <mdui-badge v-if="!message.read" variant="large">未读</mdui-badge>
             {{ message.content }}
           </span>
           <time>{{ formatDate(message.receivedAt) }}</time>
-        </button>
+        </mdui-card>
       </div>
 
       <div v-if="!loading && !messages.length && !error" class="empty">
         <span>□</span>
         <p>收件箱暂无短信</p>
       </div>
-    </section>
+    </mdui-card>
 
     <footer class="pagination">
       <span>第 {{ page }} / {{ totalPages }} 页</span>
       <div>
-        <button :disabled="loading || page <= 1" @click="changePage(-1)">上一页</button>
-        <button :disabled="loading || page >= totalPages" @click="changePage(1)">下一页</button>
+        <mdui-button variant="outlined" :disabled="loading || page <= 1" @click="changePage(-1)">上一页</mdui-button>
+        <mdui-button variant="filled" :disabled="loading || page >= totalPages" @click="changePage(1)">下一页</mdui-button>
       </div>
     </footer>
 
-    <div v-if="selected" class="modal-backdrop" @click.self="selected = null">
-      <article class="message-modal" role="dialog" aria-modal="true">
-        <button class="modal-close" aria-label="关闭" @click="selected = null">×</button>
-        <p class="eyebrow">MESSAGE {{ selected.id }}</p>
-        <h2>{{ senderLabel(selected.sender) }}</h2>
-        <time>{{ formatDate(selected.receivedAt) }}</time>
+    <mdui-dialog
+      :open="messageDialogOpen"
+      close-on-esc
+      close-on-overlay-click
+      @close="messageDialogOpen = false"
+      @closed="finishClosingMessageDialog"
+    >
+      <template v-if="selected">
+        <span slot="headline">{{ senderLabel(selected.sender) }}</span>
+        <div class="message-meta">MESSAGE {{ selected.id }} · {{ formatDate(selected.receivedAt) }}</div>
         <p class="message-full">{{ selected.content }}</p>
-        <div class="modal-actions">
-          <button class="danger-button" :disabled="actionLoading" @click="deleteMessages([selected.id])">
-            删除此短信
-          </button>
-          <button class="toolbar-button" @click="selected = null">关闭</button>
-        </div>
-      </article>
-    </div>
+        <mdui-button slot="action" class="danger-action" variant="text" :disabled="actionLoading" @click="deleteMessages([selected.id])">
+          删除此短信
+        </mdui-button>
+        <mdui-button slot="action" variant="text" @click="closeMessageDialog">关闭</mdui-button>
+      </template>
+    </mdui-dialog>
   </main>
 </template>
