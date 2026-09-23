@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseSms, sortSmsNewestFirst } from './cpe-client.js'
+import { CpeClient, parseSms, sortSmsNewestFirst } from './cpe-client.js'
 
 test('parseSms decodes the CPE Base64 record format', () => {
   const raw = '312 0 10000 2026/09/23 09:16:48 测试短信内容'
@@ -31,4 +31,25 @@ test('sortSmsNewestFirst puts the latest message first', () => {
     sortSmsNewestFirst(messages).map((message) => message.id),
     ['312', '311', '310'],
   )
+})
+
+test('SMS mutations use the original device command payloads', async () => {
+  const client = Object.create(CpeClient.prototype)
+  const payloads = []
+  client.authenticatedRequest = async (payload) => {
+    payloads.push(payload)
+    return { success: true, message: '0' }
+  }
+
+  await client.markSmsRead('312')
+  await client.markAllSmsRead()
+  await client.deleteSms(['311', '312'])
+  await client.clearInbox()
+
+  assert.deepEqual(payloads, [
+    { cmd: 12, index: '312', method: 'POST' },
+    { cmd: 12, index: 'READ ALL', method: 'POST' },
+    { cmd: 14, index: '311,312', subcmd: 0, method: 'POST' },
+    { cmd: 14, index: 'DELETE ALL', subcmd: 0, method: 'POST' },
+  ])
 })

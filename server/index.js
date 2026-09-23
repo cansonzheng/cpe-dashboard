@@ -94,6 +94,33 @@ router.get('/sms', auth.requireAuth, async (ctx) => {
   ctx.body = await getClient().getInbox(page)
 })
 
+router.post('/sms/:id/read', auth.requireAuth, async (ctx) => {
+  if (!/^\d+$/.test(ctx.params.id)) ctx.throw(400, '短信编号无效')
+  await getClient().markSmsRead(ctx.params.id)
+  ctx.body = { ok: true }
+})
+
+router.post('/sms/read-all', auth.requireAuth, async (ctx) => {
+  await getClient().markAllSmsRead()
+  ctx.body = { ok: true }
+})
+
+router.post('/sms/delete', auth.requireAuth, async (ctx) => {
+  const ids = ctx.request.body?.ids
+  if (!Array.isArray(ids) || ids.length === 0 || ids.length > 100) {
+    ctx.throw(400, '请选择要删除的短信')
+  }
+  if (ids.some((id) => !/^\d+$/.test(String(id)))) ctx.throw(400, '短信编号无效')
+
+  await getClient().deleteSms([...new Set(ids.map(String))])
+  ctx.body = { ok: true }
+})
+
+router.post('/sms/clear', auth.requireAuth, async (ctx) => {
+  await getClient().clearInbox()
+  ctx.body = { ok: true }
+})
+
 app.use(router.routes())
 app.use(router.allowedMethods())
 

@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 
 const COMMANDS = Object.freeze({
   SMS_INFO: 12,
+  SMS_DELETE: 14,
   SMS_SETTING: 16,
   LOGIN: 100,
   LOGOUT: 101,
@@ -148,6 +149,44 @@ export class CpeClient {
       inboxFull: data.receive_full === '1',
       messages,
     }
+  }
+
+  async runSmsMutation(payload) {
+    const data = await this.authenticatedRequest({ ...payload, method: 'POST' })
+    if (data.message !== undefined && String(data.message) !== '0' && data.message !== '') {
+      throw new Error(`设备操作失败：${data.message}`)
+    }
+    return data
+  }
+
+  async markSmsRead(id) {
+    return this.runSmsMutation({
+      cmd: COMMANDS.SMS_INFO,
+      index: String(id),
+    })
+  }
+
+  async markAllSmsRead() {
+    return this.runSmsMutation({
+      cmd: COMMANDS.SMS_INFO,
+      index: 'READ ALL',
+    })
+  }
+
+  async deleteSms(ids) {
+    return this.runSmsMutation({
+      cmd: COMMANDS.SMS_DELETE,
+      index: ids.map(Number).join(','),
+      subcmd: 0,
+    })
+  }
+
+  async clearInbox() {
+    return this.runSmsMutation({
+      cmd: COMMANDS.SMS_DELETE,
+      index: 'DELETE ALL',
+      subcmd: 0,
+    })
   }
 
   async logout() {

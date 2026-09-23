@@ -1,6 +1,18 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 
+const AUTH_HINT_KEY = 'cpe-dashboard-authenticated'
+
+function readAuthHint() {
+  try {
+    return window.localStorage.getItem(AUTH_HINT_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+const hasAuthHint = readAuthHint()
+
 const messages = ref([])
 const page = ref(1)
 const total = ref(0)
@@ -10,13 +22,29 @@ const loading = ref(false)
 const error = ref('')
 const refreshedAt = ref('')
 const selected = ref(null)
-const authChecking = ref(true)
-const authenticated = ref(false)
+const authChecking = ref(hasAuthHint)
+const authenticated = ref(hasAuthHint)
 const password = ref('')
 const authError = ref('')
 const authLoading = ref(false)
+const selectedIds = ref([])
+const actionLoading = ref(false)
+const feedback = ref('')
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const allPageSelected = computed(() => (
+  messages.value.length > 0 && messages.value.every((message) => selectedIds.value.includes(message.id))
+))
+
+function setAuthenticated(value) {
+  authenticated.value = value
+  try {
+    if (value) window.localStorage.setItem(AUTH_HINT_KEY, '1')
+    else window.localStorage.removeItem(AUTH_HINT_KEY)
+  } catch {
+    // Storage may be disabled. The HttpOnly cookie remains the source of truth.
+  }
+}
 
 function formatDate(value) {
   if (!value) return '—'
@@ -31,7 +59,7 @@ function senderLabel(sender) {
 async function readJson(response) {
   const data = await response.json().catch(() => ({}))
   if (response.status === 401) {
-    authenticated.value = false
+    setAuthenticated(false)
     messages.value = []
   }
   if (!response.ok) throw new Error(data.error || '请求失败')
@@ -50,6 +78,7 @@ async function loadMessages(targetPage = page.value) {
     total.value = data.total
     unread.value = data.unread
     if (data.pageSize) pageSize.value = data.pageSize
+    selectedIds.value = []
     refreshedAt.value = new Date().toLocaleTimeString('zh-CN', {
       hour: '2-digit',
       minute: '2-digit',
@@ -66,10 +95,11 @@ async function checkSession() {
   try {
     const response = await fetch('/api/auth/session')
     const data = await readJson(response)
-    authenticated.value = data.authenticated
+    setAuthenticated(data.authenticated)
     if (authenticated.value) await loadMessages(1)
   } catch (cause) {
-    authError.value = cause.message
+    if (authenticated.value) error.value = `登录状态验证失败：${cause.message}`
+    else authError.value = cause.message
   } finally {
     authChecking.value = false
   }
@@ -85,7 +115,7 @@ async function login() {
       body: JSON.stringify({ password: password.value }),
     })
     await readJson(response)
-    authenticated.value = true
+    setAuthenticated(true)
     password.value = ''
     await loadMessages(1)
   } catch (cause) {
@@ -97,10 +127,107 @@ async function login() {
 
 async function logout() {
   await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
-  authenticated.value = false
+  setAuthenticated(false)
   messages.value = []
   selected.value = null
   error.value = ''
+  selectedIds.value = []
+}
+
+async function postAction(url, body) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  return readJson(response)
+}
+
+function showFeedback(message) {
+  feedback.value = message
+  window.setTimeout(() => {
+    if (feedback.value === message) feedback.value = ''
+  }, 3000)
+}
+
+function toggleSelection(id) {
+  selectedIds.value = selectedIds.value.includes(id)
+    ? selectedIds.value.filter((selectedId) => selectedId !== id)
+    : [...selectedIds.value, id]
+}
+
+function togglePageSelection() {
+  selectedIds.value = allPageSelected.value
+    ? []
+    : messages.value.map((message) => message.id)
+}
+
+async function openMessage(message) {
+  selected.value = message
+  if (message.read) return
+
+  message.read = true
+  unread.value = Math.max(0, unread.value - 1)
+  try {
+    await postAction(`/api/sms/${message.id}/read`)
+  } catch (cause) {
+    message.read = false
+    unread.value += 1
+    error.value = `标记已读失败：${cause.message}`
+  }
+}
+
+async function markAllRead() {
+  actionLoading.value = true
+  error.value = ''
+  try {
+    await postAction('/api/sms/read-all')
+    messages.value.forEach((message) => { message.read = true })
+    unread.value = 0
+    showFeedback('所有短信已标记为已读')
+  } catch (cause) {
+    error.value = `全部已读失败：${cause.message}`
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function deleteMessages(ids) {
+  if (!ids.length) return
+  const prompt = ids.length === 1 ? '确定删除这条短信吗？' : `确定删除选中的 ${ids.length} 条短信吗？`
+  if (!window.confirm(prompt)) return
+
+  actionLoading.value = true
+  error.value = ''
+  try {
+    await postAction('/api/sms/delete', { ids })
+    if (selected.value && ids.includes(selected.value.id)) selected.value = null
+    const remainingTotal = Math.max(0, total.value - ids.length)
+    const targetPage = Math.min(page.value, Math.max(1, Math.ceil(remainingTotal / pageSize.value)))
+    await loadMessages(targetPage)
+    showFeedback(ids.length === 1 ? '短信已删除' : `已删除 ${ids.length} 条短信`)
+  } catch (cause) {
+    error.value = `删除失败：${cause.message}`
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function clearInbox() {
+  if (!window.confirm(`确定清空收件箱中的 ${total.value} 条短信吗？此操作无法撤销。`)) return
+
+  actionLoading.value = true
+  error.value = ''
+  try {
+    await postAction('/api/sms/clear')
+    selected.value = null
+    await loadMessages(1)
+    showFeedback('收件箱已清空')
+  } catch (cause) {
+    error.value = `清空失败：${cause.message}`
+  } finally {
+    actionLoading.value = false
+  }
 }
 
 function changePage(direction) {
@@ -112,7 +239,7 @@ onMounted(checkSession)
 </script>
 
 <template>
-  <main v-if="authChecking" class="auth-screen">
+  <main v-if="authChecking && !authenticated" class="auth-screen">
     <div class="auth-card auth-loading-card">
       <span class="brand-mark" aria-hidden="true">C</span>
       <p>正在检查登录状态…</p>
@@ -175,27 +302,80 @@ onMounted(checkSession)
       <button @click="loadMessages(page)">重试</button>
     </div>
 
-    <section class="inbox" :class="{ muted: loading }">
+    <div v-if="feedback" class="notice success-notice">
+      <strong>操作成功</strong>
+      <span>{{ feedback }}</span>
+    </div>
+
+    <section class="inbox-toolbar" aria-label="短信操作">
+      <div>
+        <button
+          class="toolbar-button"
+          :disabled="actionLoading || unread === 0"
+          @click="markAllRead"
+        >
+          全部已读
+        </button>
+        <span v-if="selectedIds.length" class="selection-count">已选 {{ selectedIds.length }} 条</span>
+      </div>
+      <div>
+        <button
+          class="toolbar-button danger-button"
+          :disabled="actionLoading || selectedIds.length === 0"
+          @click="deleteMessages(selectedIds)"
+        >
+          删除所选
+        </button>
+        <button
+          class="toolbar-button danger-button subtle-danger"
+          :disabled="actionLoading || total === 0"
+          @click="clearInbox"
+        >
+          清空收件箱
+        </button>
+      </div>
+    </section>
+
+    <section class="inbox" :class="{ muted: loading || actionLoading }">
       <div class="inbox-head">
+        <label class="check-cell" title="选择本页全部短信">
+          <input
+            type="checkbox"
+            :checked="allPageSelected"
+            :disabled="messages.length === 0"
+            aria-label="选择本页全部短信"
+            @change="togglePageSelection"
+          />
+        </label>
         <span>发件人</span>
         <span>短信内容</span>
         <span>接收时间</span>
       </div>
 
-      <button v-for="message in messages" :key="message.id" class="message-row" :class="{ unread: !message.read }" @click="selected = message">
-        <span class="sender-cell">
-          <span class="avatar">{{ senderLabel(message.sender).slice(0, 1) }}</span>
-          <span>
-            <strong>{{ senderLabel(message.sender) }}</strong>
-            <small>{{ message.sender }}</small>
+      <div v-for="message in messages" :key="message.id" class="message-row" :class="{ unread: !message.read }">
+        <label class="check-cell">
+          <input
+            type="checkbox"
+            :checked="selectedIds.includes(message.id)"
+            :aria-label="`选择短信 ${message.id}`"
+            @change="toggleSelection(message.id)"
+          />
+        </label>
+        <button class="message-open" @click="openMessage(message)">
+          <span class="sender-cell">
+            <span class="avatar">{{ senderLabel(message.sender).slice(0, 1) }}</span>
+            <span>
+              <strong>{{ senderLabel(message.sender) }}</strong>
+              <small>{{ message.sender }}</small>
+            </span>
           </span>
-        </span>
-        <span class="content-cell">
-          <i v-if="!message.read">未读</i>
-          {{ message.content }}
-        </span>
-        <time>{{ formatDate(message.receivedAt) }}</time>
-      </button>
+          <span class="content-cell">
+            <i v-if="!message.read">未读</i>
+            {{ message.content }}
+          </span>
+          <time>{{ formatDate(message.receivedAt) }}</time>
+        </button>
+      </div>
 
       <div v-if="!loading && !messages.length && !error" class="empty">
         <span>□</span>
@@ -218,6 +398,12 @@ onMounted(checkSession)
         <h2>{{ senderLabel(selected.sender) }}</h2>
         <time>{{ formatDate(selected.receivedAt) }}</time>
         <p class="message-full">{{ selected.content }}</p>
+        <div class="modal-actions">
+          <button class="danger-button" :disabled="actionLoading" @click="deleteMessages([selected.id])">
+            删除此短信
+          </button>
+          <button class="toolbar-button" @click="selected = null">关闭</button>
+        </div>
       </article>
     </div>
   </main>

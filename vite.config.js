@@ -7,7 +7,7 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg', 'pwa-192.png', 'pwa-512.png'],
+      includeAssets: ['icon.svg', 'pwa-192.png', 'pwa-512.png', 'pwa-maskable-512.png'],
       manifest: {
         name: 'CPE Dashboard',
         short_name: 'CPE Dashboard',
@@ -32,10 +32,10 @@ export default defineConfig({
             purpose: 'any',
           },
           {
-            src: '/pwa-512.png',
+            src: '/pwa-maskable-512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable',
+            purpose: 'maskable',
           },
         ],
       },

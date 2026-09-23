@@ -12,7 +12,8 @@
 | --- | --- | --- |
 | 232 | 获取一次性登录令牌 | `method: "GET"`, `sessionId: ""` |
 | 100 | 登录 | `username`, `passwd`, `token`, `sessionId` |
-| 12 | 查询短信列表 | `page_num`, `subcmd: 0`, `sessionId` |
+| 12 | 查询短信列表、标记已读 | `page_num`, `subcmd: 0` 或 `index` |
+| 14 | 删除短信、清空收件箱 | `index`, `subcmd: 0` |
 | 16 | 查询短信设置 | `sessionId` |
 | 101 | 退出登录 | `sessionId`, `token` |
 
@@ -122,6 +123,10 @@ docker run --env-file .env -p 3100:3100 cpe-dashboard
 - `POST /api/auth/logout`：退出登录
 - `GET /api/sms?page=1`：分页短信列表
 - `GET /api/sms/settings`：短信功能配置摘要
+- `POST /api/sms/:id/read`：将单条短信标为已读
+- `POST /api/sms/read-all`：将全部短信标为已读
+- `POST /api/sms/delete`：删除所选短信，JSON 请求体为 `{ "ids": ["1", "2"] }`
+- `POST /api/sms/clear`：清空收件箱
 
 短信相关接口均要求登录。
 

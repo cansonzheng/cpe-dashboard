@@ -111,6 +111,10 @@ The public Koa API currently contains:
 - `POST /api/auth/logout`
 - `GET /api/sms?page=1`
 - `GET /api/sms/settings`
+- `POST /api/sms/:id/read`
+- `POST /api/sms/read-all`
+- `POST /api/sms/delete`
+- `POST /api/sms/clear`
 
 Preserve the response shape of existing routes unless a requested change
 explicitly requires a breaking API change.
@@ -131,6 +135,7 @@ Known commands:
 | `232` | Get the one-time login token |
 | `100` | Log in |
 | `12` | Read the SMS inbox |
+| `14` | Delete inbox messages |
 | `16` | Read SMS settings |
 | `101` | Log out |
 
@@ -154,8 +159,10 @@ messageId readFlag sender YYYY/MM/DD HH:mm:ss messageBody
 ```
 
 - `readFlag` is `1` for read and `0` for unread.
-- Reading the inbox list must remain read-only. Do not mark messages as read,
-  delete messages, send messages, or alter device settings unless the user asks.
+- Reading the inbox list must remain read-only unless the user explicitly asks
+  for mutations. Mark-as-read, delete-selected, and clear-inbox are implemented;
+  keep all mutation routes authenticated and require confirmation for deletes.
+- Do not add SMS sending, replies, or forwarding unless the user asks.
 
 ## Coding conventions
 
