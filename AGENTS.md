@@ -41,17 +41,17 @@ Do not edit these directories by hand.
 Use Node.js 20.19 or newer.
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 Useful commands:
 
 ```bash
-npm test          # Run Node.js unit tests
-npm run build     # Build the self-contained dist/ directory with Rolldown
-npm run build:web # Build only the Vue/PWA frontend
-npm start         # Serve the built frontend and Koa API on PORT
+pnpm test      # Run Node.js unit tests
+pnpm build     # Build the self-contained dist/ directory with Rolldown
+pnpm build:web # Build only the Vue/PWA frontend
+pnpm start     # Serve the built frontend and Koa API on PORT
 ```
 
 During development:
@@ -196,18 +196,18 @@ messageId readFlag sender YYYY/MM/DD HH:mm:ss messageBody
 After backend protocol or parser changes, run:
 
 ```bash
-npm test
+pnpm test
 ```
 
 After frontend, dependency, or build configuration changes, run:
 
 ```bash
-npm run build
+pnpm build
 ```
 
 The production artifact must remain self-contained and minimal: `dist/`
 contains only `public/` and `server/index.mjs`. It must run with Node.js 22
-without `node_modules` or `npm install`. Do not copy documentation, environment
+without `node_modules` or `pnpm install`. Do not copy documentation, environment
 templates, or package metadata into it. Docker Compose mounts it read-only and
 executes the bundled server.
 
