@@ -366,9 +366,15 @@ onMounted(checkSession)
     <header class="topbar">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true">C</span>
-        <div>
+        <div class="brand-content">
           <p class="eyebrow">CPE DASHBOARD</p>
-          <h1>短信收件箱</h1>
+          <div class="title-row">
+            <h1>短信收件箱</h1>
+            <span class="sync-time">
+              <span class="status-dot"></span>
+              {{ refreshedAt ? `最后同步 ${refreshedAt}` : '正在连接设备' }}
+            </span>
+          </div>
         </div>
       </div>
       <div class="top-actions">
@@ -377,23 +383,6 @@ onMounted(checkSession)
         </IconTooltipButton>
       </div>
     </header>
-
-    <section class="summary" aria-label="收件箱概览">
-      <mdui-card variant="filled" class="summary-card">
-        <span class="summary-value">{{ total }}</span>
-        <span class="summary-label">全部短信</span>
-      </mdui-card>
-      <mdui-card variant="filled" class="summary-card">
-        <span class="summary-value accent">{{ unread }}</span>
-        <span class="summary-label">未读</span>
-      </mdui-card>
-      <mdui-card variant="filled" class="sync-card">
-        <p class="sync-time">
-          <span class="status-dot"></span>
-          {{ refreshedAt ? `最后同步 ${refreshedAt}` : '正在连接设备' }}
-        </p>
-      </mdui-card>
-    </section>
 
     <mdui-card v-if="error" variant="filled" class="notice error-notice">
       <div>
@@ -420,6 +409,7 @@ onMounted(checkSession)
         <IconTooltipButton content="刷新" variant="outlined" aria-label="刷新" :loading="loading" :disabled="loading" @click="loadMessages(page)">
           <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.1A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></mdui-icon>
         </IconTooltipButton>
+        <span class="toolbar-unread">未读 {{ unread }} 条</span>
       </div>
 
       <div class="toolbar-actions">
@@ -488,7 +478,7 @@ onMounted(checkSession)
     </mdui-card>
 
     <footer class="pagination">
-      <span>第 {{ page }} / {{ totalPages }} 页</span>
+      <span>共 {{ total }} 条 · 第 {{ page }} / {{ totalPages }} 页</span>
       <div>
         <IconTooltipButton content="上一页" variant="outlined" aria-label="上一页" :disabled="loading || page <= 1" @click="changePage(-1)">
           <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></mdui-icon>

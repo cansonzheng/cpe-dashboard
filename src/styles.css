@@ -33,20 +33,16 @@ button { font: inherit; }
 .shell { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 40px 0 56px; }
 .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
 .brand { display: flex; align-items: center; gap: 16px; }
+.brand-content { min-width: 0; }
 .brand-mark { display: grid; place-items: center; width: 48px; height: 48px; color: rgb(var(--mdui-color-on-primary)); background: rgb(var(--mdui-color-primary)); border-radius: var(--mdui-shape-corner-large); font-size: 22px; font-weight: 700; box-shadow: var(--mdui-elevation-level2); }
 .eyebrow { margin: 0 0 4px; color: rgb(var(--mdui-color-on-surface-variant)); font-size: 10px; font-weight: 700; letter-spacing: .18em; }
+.title-row { display: flex; align-items: center; gap: 18px; }
 h1 { margin: 0; font-size: 28px; font-weight: 500; line-height: 1.15; }
 .top-actions { display: flex; align-items: center; gap: 8px; }
 .action-icon { display: block; width: 24px; height: 24px; fill: currentColor; }
 mdui-tooltip { display: inline-flex; }
 
-.summary { display: grid; grid-template-columns: 160px 160px 1fr; gap: 12px; margin-bottom: 20px; }
-.summary-card, .sync-card { display: block; min-height: 104px; padding: 22px 24px; --shape-corner: var(--mdui-shape-corner-large); }
-.summary-value { display: block; font-size: 32px; font-weight: 500; line-height: 1; }
-.summary-value.accent { color: rgb(var(--mdui-color-primary)); }
-.summary-label { display: block; margin-top: 8px; color: rgb(var(--mdui-color-on-surface-variant)); font-size: 12px; }
-.sync-card { display: flex; align-items: center; justify-content: flex-end; }
-.sync-time { display: flex; align-items: center; gap: 9px; margin: 0; color: rgb(var(--mdui-color-on-surface-variant)); font-size: 13px; }
+.sync-time { display: flex; flex: 0 0 auto; align-items: center; gap: 9px; margin: 0; color: rgb(var(--mdui-color-on-surface-variant)); font-size: 13px; }
 .status-dot { width: 8px; height: 8px; background: rgb(var(--mdui-color-primary)); border-radius: 50%; box-shadow: 0 0 0 5px rgba(var(--mdui-color-primary), .12); }
 
 .notice { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; padding: 14px 18px; --shape-corner: var(--mdui-shape-corner-medium); }
@@ -58,6 +54,7 @@ mdui-tooltip { display: inline-flex; }
 .inbox-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
 .inbox-toolbar > div { display: flex; align-items: center; gap: 8px; }
 .toolbar-actions { justify-content: flex-end; }
+.toolbar-unread { color: rgb(var(--mdui-color-on-surface-variant)); font-size: 13px; }
 .selection-count { color: rgb(var(--mdui-color-on-surface-variant)); font-size: 13px; }
 .danger-action { --mdui-color-primary: var(--mdui-color-error); --mdui-color-on-primary: var(--mdui-color-on-error); --mdui-color-primary-container: var(--mdui-color-error-container); --mdui-color-on-primary-container: var(--mdui-color-on-error-container); }
 .inbox { display: block; overflow: hidden; --shape-corner: var(--mdui-shape-corner-large); transition: opacity .2s; }
@@ -91,8 +88,9 @@ mdui-tooltip { display: inline-flex; }
 
 @media (max-width: 760px) {
   .shell { width: min(100% - 24px, 1180px); padding-top: 24px; }
-  .summary { grid-template-columns: 1fr 1fr; }
-  .sync-card { grid-column: 1 / -1; min-height: 64px; justify-content: flex-start; }
+  .topbar { align-items: flex-start; }
+  .title-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .sync-time { font-size: 12px; }
   .inbox-head { display: none; }
   .message-row { grid-template-columns: minmax(0, 1fr); padding: 0 12px; }
   .inbox.selection-mode .message-row { grid-template-columns: 34px minmax(0, 1fr); gap: 8px; }
@@ -106,7 +104,6 @@ mdui-tooltip { display: inline-flex; }
   .brand-mark { display: none; }
   .auth-card { padding: 30px 24px; }
   .auth-card .brand-mark { display: grid; }
-  .summary-card { padding: 18px; }
   .message-open time { display: none; }
   .message-open { grid-template-columns: 1fr; }
   .inbox-toolbar { gap: 8px; }
