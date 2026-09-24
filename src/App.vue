@@ -255,6 +255,7 @@ async function copyVerificationCode() {
       throw new Error('Clipboard is unavailable')
     }
     showFeedback('验证码已复制')
+    closeMessageDialog()
   } catch {
     showFeedback('复制失败，请手动复制验证码')
   }
