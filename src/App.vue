@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { confirm as confirmDialog } from 'mdui/functions/confirm.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
+import IconTooltipButton from './components/IconTooltipButton.vue'
 
 const AUTH_HINT_KEY = 'cpe-dashboard-authenticated'
 
@@ -31,12 +32,18 @@ const password = ref('')
 const authError = ref('')
 const authLoading = ref(false)
 const selectedIds = ref([])
+const selectionMode = ref(false)
 const actionLoading = ref(false)
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const allPageSelected = computed(() => (
   messages.value.length > 0 && messages.value.every((message) => selectedIds.value.includes(message.id))
 ))
+const verificationCode = computed(() => {
+  const content = selected.value?.content
+  if (!content?.includes('验证码')) return ''
+  return content.match(/(?:^|\D)(\d{4,6})(?!\d)/)?.[1] ?? ''
+})
 
 function setAuthenticated(value) {
   authenticated.value = value
@@ -134,6 +141,7 @@ async function logout() {
   messageDialogOpen.value = false
   selected.value = null
   error.value = ''
+  selectionMode.value = false
   selectedIds.value = []
 }
 
@@ -178,6 +186,24 @@ function togglePageSelection() {
     : messages.value.map((message) => message.id)
 }
 
+function enterSelectionMode() {
+  selectionMode.value = true
+  selectedIds.value = []
+}
+
+function leaveSelectionMode() {
+  selectionMode.value = false
+  selectedIds.value = []
+}
+
+function handleMessageClick(message) {
+  if (selectionMode.value) {
+    toggleSelection(message.id)
+    return
+  }
+  openMessage(message)
+}
+
 async function openMessage(message) {
   selected.value = message
   messageDialogOpen.value = true
@@ -200,6 +226,38 @@ function closeMessageDialog() {
 
 function finishClosingMessageDialog() {
   selected.value = null
+}
+
+function copyTextFallback(value) {
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  const copied = document.execCommand('copy')
+  textarea.remove()
+  return copied
+}
+
+async function copyVerificationCode() {
+  if (!verificationCode.value) return
+
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(verificationCode.value)
+      } catch {
+        if (!copyTextFallback(verificationCode.value)) throw new Error('Clipboard is unavailable')
+      }
+    } else if (!copyTextFallback(verificationCode.value)) {
+      throw new Error('Clipboard is unavailable')
+    }
+    showFeedback('验证码已复制')
+  } catch {
+    showFeedback('复制失败，请手动复制验证码')
+  }
 }
 
 async function markAllRead() {
@@ -313,10 +371,9 @@ onMounted(checkSession)
         </div>
       </div>
       <div class="top-actions">
-        <mdui-button variant="text" @click="logout">退出</mdui-button>
-        <mdui-button variant="tonal" :loading="loading" :disabled="loading" @click="loadMessages(page)">
-          {{ loading ? '读取中' : '刷新' }}
-        </mdui-button>
+        <IconTooltipButton content="退出登录" placement="bottom-end" aria-label="退出登录" @click="logout">
+          <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5-5-5zM4 5h8V3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8v-2H4V5z"/></svg></mdui-icon>
+        </IconTooltipButton>
       </div>
     </header>
 
@@ -342,44 +399,51 @@ onMounted(checkSession)
         <strong>操作遇到问题</strong>
         <span>{{ error }}</span>
       </div>
-      <mdui-button variant="text" @click="loadMessages(page)">重试</mdui-button>
+      <IconTooltipButton content="重试" placement="left" class="danger-action" aria-label="重试" @click="loadMessages(page)">
+        <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.1A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></mdui-icon>
+      </IconTooltipButton>
     </mdui-card>
 
-    <section class="inbox-toolbar" aria-label="短信操作">
-      <div>
-        <mdui-button
+    <section class="inbox-toolbar" aria-label="短信工具区">
+      <div class="toolbar-primary-actions">
+        <IconTooltipButton
+          :content="selectionMode ? '退出选择' : '选择短信'"
           variant="tonal"
-          :disabled="actionLoading || unread === 0"
-          @click="markAllRead"
+          :aria-label="selectionMode ? '退出选择' : '选择短信'"
+          :disabled="!selectionMode && messages.length === 0"
+          @click="selectionMode ? leaveSelectionMode() : enterSelectionMode()"
         >
-          全部已读
-        </mdui-button>
-        <mdui-badge v-if="selectedIds.length" variant="large">已选 {{ selectedIds.length }} 条</mdui-badge>
+          <mdui-icon v-if="selectionMode"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.41 4.29 19.71 2.88 18.3 9.17 12 2.88 5.7 4.29 4.29 10.59 10.59 16.89 4.29z"/></svg></mdui-icon>
+          <mdui-icon v-else><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 7h-9v2h9V7zm0 8h-9v2h9v-2zM5.54 11 2 7.46l1.41-1.41 2.13 2.13 4.25-4.25 1.41 1.41L5.54 11zm0 8L2 15.46l1.41-1.41 2.13 2.13 4.25-4.25 1.41 1.41L5.54 19z"/></svg></mdui-icon>
+        </IconTooltipButton>
+        <IconTooltipButton content="刷新" variant="outlined" aria-label="刷新" :loading="loading" :disabled="loading" @click="loadMessages(page)">
+          <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.1A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></mdui-icon>
+        </IconTooltipButton>
       </div>
-      <div>
-        <mdui-button
-          class="danger-action"
-          variant="outlined"
-          :disabled="actionLoading || selectedIds.length === 0"
-          @click="deleteMessages(selectedIds)"
-        >
-          删除所选
-        </mdui-button>
-        <mdui-button
-          class="danger-action"
-          variant="text"
-          :disabled="actionLoading || total === 0"
-          @click="clearInbox"
-        >
-          清空收件箱
-        </mdui-button>
+
+      <div class="toolbar-actions">
+        <template v-if="selectionMode">
+          <span class="selection-count">已选 {{ selectedIds.length }} 条</span>
+          <IconTooltipButton content="删除所选" placement="top-end" class="danger-action" variant="outlined" aria-label="删除所选" :disabled="actionLoading || selectedIds.length === 0" @click="deleteMessages(selectedIds)">
+            <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm3.46-7.12 1.41-1.41L12 11.59l1.12-1.12 1.41 1.41L13.41 13l1.12 1.12-1.41 1.41L12 14.41l-1.12 1.12-1.41-1.41L10.59 13l-1.13-1.12zM15.5 4l-1-1h-5l-1 1H5v2h14V4z"/></svg></mdui-icon>
+          </IconTooltipButton>
+        </template>
+
+        <template v-else>
+          <IconTooltipButton content="全部标记为已读" variant="tonal" aria-label="全部标记为已读" :disabled="actionLoading || unread === 0" @click="markAllRead">
+            <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m18 7-1.41-1.41-6.34 6.34 1.41 1.41L18 7zm4.24-1.41L11.66 16.17 7.48 12l-1.41 1.41 5.59 5.59L23.66 7l-1.42-1.41zM.41 13.41 6 19l1.41-1.41L1.83 12 .41 13.41z"/></svg></mdui-icon>
+          </IconTooltipButton>
+          <IconTooltipButton content="清空收件箱" placement="top-end" class="danger-action" variant="outlined" aria-label="清空收件箱" :disabled="actionLoading || total === 0" @click="clearInbox">
+            <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm3-8h6v2H9v-2zm0 4h6v2H9v-2zm6.5-11-1-1h-5l-1 1H5v2h14V4z"/></svg></mdui-icon>
+          </IconTooltipButton>
+        </template>
       </div>
     </section>
 
-    <mdui-card variant="outlined" class="inbox" :class="{ muted: loading || actionLoading }">
+    <mdui-card variant="outlined" class="inbox" :class="{ muted: loading || actionLoading, 'selection-mode': selectionMode }">
       <mdui-linear-progress v-if="loading || actionLoading"></mdui-linear-progress>
       <div class="inbox-head">
-        <label class="check-cell" title="选择本页全部短信">
+        <label v-if="selectionMode" class="check-cell" title="选择本页全部短信">
           <mdui-checkbox
             :checked="allPageSelected"
             :disabled="messages.length === 0"
@@ -393,14 +457,14 @@ onMounted(checkSession)
       </div>
 
       <div v-for="message in messages" :key="message.id" class="message-row" :class="{ unread: !message.read }">
-        <label class="check-cell">
+        <label v-if="selectionMode" class="check-cell">
           <mdui-checkbox
             :checked="selectedIds.includes(message.id)"
             :aria-label="`选择短信 ${message.id}`"
             @change="toggleSelection(message.id)"
           ></mdui-checkbox>
         </label>
-        <mdui-card variant="filled" class="message-open" @click="openMessage(message)">
+        <mdui-card variant="filled" class="message-open" @click="handleMessageClick(message)">
           <span class="sender-cell">
             <mdui-avatar>{{ senderLabel(message.sender).slice(0, 1) }}</mdui-avatar>
             <span>
@@ -425,12 +489,17 @@ onMounted(checkSession)
     <footer class="pagination">
       <span>第 {{ page }} / {{ totalPages }} 页</span>
       <div>
-        <mdui-button variant="outlined" :disabled="loading || page <= 1" @click="changePage(-1)">上一页</mdui-button>
-        <mdui-button variant="filled" :disabled="loading || page >= totalPages" @click="changePage(1)">下一页</mdui-button>
+        <IconTooltipButton content="上一页" variant="outlined" aria-label="上一页" :disabled="loading || page <= 1" @click="changePage(-1)">
+          <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></mdui-icon>
+        </IconTooltipButton>
+        <IconTooltipButton content="下一页" placement="top-end" variant="filled" aria-label="下一页" :disabled="loading || page >= totalPages" @click="changePage(1)">
+          <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 4-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8-8-8z"/></svg></mdui-icon>
+        </IconTooltipButton>
       </div>
     </footer>
 
     <mdui-dialog
+      class="message-dialog"
       :open="messageDialogOpen"
       close-on-esc
       close-on-overlay-click
@@ -441,8 +510,8 @@ onMounted(checkSession)
         <span slot="headline">{{ senderLabel(selected.sender) }}</span>
         <div class="message-meta">MESSAGE {{ selected.id }} · {{ formatDate(selected.receivedAt) }}</div>
         <p class="message-full">{{ selected.content }}</p>
-        <mdui-button slot="action" class="danger-action" variant="text" :disabled="actionLoading" @click="deleteMessages([selected.id])">
-          删除此短信
+        <mdui-button v-if="verificationCode" slot="action" variant="text" @click="copyVerificationCode">
+          复制验证码
         </mdui-button>
         <mdui-button slot="action" variant="text" @click="closeMessageDialog">关闭</mdui-button>
       </template>

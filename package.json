@@ -7,6 +7,7 @@
     "dev": "concurrently -k -n server,web -c blue,green \"npm:dev:server\" \"npm:dev:web\"",
     "dev:server": "node --watch server/index.js",
     "dev:web": "vite",
+    "deploy":"rsync -av dist root@192.168.20.1:/docker/cpe-dashboard",
     "build": "node scripts/build-release.mjs",
     "build:web": "vite build --outDir dist/public",
     "start": "node server/index.js",
