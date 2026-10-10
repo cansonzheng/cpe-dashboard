@@ -3,7 +3,6 @@ import { computed } from 'vue'
 
 const props = defineProps({
   data: { type: Object, default: null },
-  loading: Boolean,
 })
 
 const signalLevel = computed(() => props.data?.signal?.level ?? 0)
@@ -33,10 +32,9 @@ function formatGigabytes(value) {
 
 <template>
   <section class="overview" aria-label="设备概览">
-    <mdui-linear-progress v-if="loading" class="overview-loading"></mdui-linear-progress>
 
     <div class="overview-grid">
-      <mdui-card variant="outlined" class="category-card">
+      <mdui-card variant="outlined" class="category-card network-card">
         <div class="category-heading">
           <div class="category-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M12 11c1.66 0 2.99-1.34 2.99-3S13.66 5 12 5 9 6.34 9 8s1.34 3 3 3zm0-8C6.48 3 2 7.48 2 13c0 2.76 1.12 5.26 2.93 7.07l1.42-1.42A7.95 7.95 0 0 1 4 13a8 8 0 0 1 16 0c0 2.21-.9 4.21-2.35 5.65l1.42 1.42A9.97 9.97 0 0 0 22 13c0-5.52-4.48-10-10-10zm0 10c-2.76 0-5 2.24-5 5 0 1.38.56 2.63 1.46 3.54l1.42-1.42A2.99 2.99 0 0 1 9 18a3 3 0 0 1 6 0c0 .83-.34 1.58-.88 2.12l1.42 1.42A4.98 4.98 0 0 0 17 18c0-2.76-2.24-5-5-5z"/></svg>
@@ -65,7 +63,7 @@ function formatGigabytes(value) {
         </div>
       </mdui-card>
 
-      <mdui-card variant="outlined" class="category-card">
+      <mdui-card variant="outlined" class="category-card device-card">
         <div class="category-heading">
           <div class="category-icon secondary" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M15 1H9v2h6V1zm-1 13h-4v-4h4v4zm3.03-4.03 1.42-1.42A8.96 8.96 0 0 0 13 5.07V3h-2v2.07A9 9 0 1 0 20.93 15H23v-2h-2.07a8.97 8.97 0 0 0-3.9-3.03zM12 21a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"/></svg>

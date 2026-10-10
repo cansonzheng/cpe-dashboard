@@ -143,4 +143,6 @@ docker run --env-file .env -p 3100:3100 cpe-dashboard
 
 生产构建会生成 Web App Manifest 和 Service Worker，可将 cpe-dashboard 安装为独立应用。应用外壳支持离线打开，但设备 API 始终使用网络请求且不会被 Service Worker 缓存。
 
+页面会在当前浏览器的 localStorage 中保留最近成功加载的概览和一页短信（包含正文）。已有登录凭据时，重新打开页面先显示这些数据，再联网更新；请求失败时保留已有数据。标记已读、删除或清空后会更新缓存，退出登录或确认登录失效时会清除缓存。缓存不包含访问密码、设备凭据或会话信息。
+
 Service Worker 仅能在 HTTPS 或 `localhost` 安全上下文中注册。通过局域网 IP 在手机上安装时，需要为服务配置 HTTPS。

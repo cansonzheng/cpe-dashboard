@@ -6,6 +6,34 @@ import IconTooltipButton from './components/IconTooltipButton.vue'
 import OverviewPage from './components/OverviewPage.vue'
 
 const AUTH_HINT_KEY = 'cpe-dashboard-authenticated'
+const DATA_CACHE_KEY = 'cpe-dashboard-data-v1'
+
+function readDataCache() {
+  try {
+    const cached = JSON.parse(window.localStorage.getItem(DATA_CACHE_KEY) || '{}')
+    return cached && typeof cached === 'object' ? cached : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeDataCache() {
+  if (!authenticated.value) return
+  try {
+    window.localStorage.setItem(DATA_CACHE_KEY, JSON.stringify({
+      overview: overview.value,
+      inbox: {
+        messages: messages.value,
+        page: page.value,
+        total: total.value,
+        unread: unread.value,
+        pageSize: pageSize.value,
+      },
+    }))
+  } catch {
+    // Data still works in memory when storage is unavailable or full.
+  }
+}
 
 function readAuthHint() {
   try {
@@ -16,18 +44,20 @@ function readAuthHint() {
 }
 
 const hasAuthHint = readAuthHint()
+const cachedData = hasAuthHint ? readDataCache() : {}
+const cachedInbox = Array.isArray(cachedData.inbox?.messages) ? cachedData.inbox : null
 const initialPage = window.location.hash === '#sms' ? 'sms' : 'overview'
 const navigationMedia = window.matchMedia('(max-width: 760px)')
 
 const activePage = ref(initialPage)
 const compactNavigation = ref(navigationMedia.matches)
-const overview = ref(null)
+const overview = ref(cachedData.overview && typeof cachedData.overview === 'object' ? cachedData.overview : null)
 const overviewLoading = ref(false)
-const messages = ref([])
-const page = ref(1)
-const total = ref(0)
-const unread = ref(0)
-const pageSize = ref(10)
+const messages = ref(cachedInbox?.messages || [])
+const page = ref(Number.isInteger(cachedInbox?.page) && cachedInbox.page > 0 ? cachedInbox.page : 1)
+const total = ref(Number.isFinite(cachedInbox?.total) ? cachedInbox.total : 0)
+const unread = ref(Number.isFinite(cachedInbox?.unread) ? cachedInbox.unread : 0)
+const pageSize = ref(Number.isFinite(cachedInbox?.pageSize) && cachedInbox.pageSize > 0 ? cachedInbox.pageSize : 10)
 const loading = ref(false)
 const error = ref('')
 const selected = ref(null)
@@ -40,6 +70,9 @@ const authLoading = ref(false)
 const selectedIds = ref([])
 const selectionMode = ref(false)
 const actionLoading = ref(false)
+const globalLoading = computed(() => (
+  authChecking.value || authLoading.value || overviewLoading.value || loading.value || actionLoading.value
+))
 
 const pageTitle = computed(() => activePage.value === 'overview' ? '概览' : '短信收件箱')
 
@@ -55,9 +88,21 @@ const verificationCode = computed(() => {
 
 function setAuthenticated(value) {
   authenticated.value = value
+  if (!value) {
+    overview.value = null
+    messages.value = []
+    page.value = 1
+    total.value = 0
+    unread.value = 0
+    selected.value = null
+    messageDialogOpen.value = false
+  }
   try {
     if (value) window.localStorage.setItem(AUTH_HINT_KEY, '1')
-    else window.localStorage.removeItem(AUTH_HINT_KEY)
+    else {
+      window.localStorage.removeItem(AUTH_HINT_KEY)
+      window.localStorage.removeItem(DATA_CACHE_KEY)
+    }
   } catch {
     // Storage may be disabled. The HttpOnly cookie remains the source of truth.
   }
@@ -89,7 +134,10 @@ async function loadOverview() {
   error.value = ''
   try {
     const response = await fetch('/api/overview')
-    overview.value = await readJson(response)
+    const data = await readJson(response)
+    if (!authenticated.value) return
+    overview.value = data
+    writeDataCache()
   } catch (cause) {
     if (authenticated.value) error.value = cause.message
   } finally {
@@ -103,6 +151,7 @@ async function loadMessages(targetPage = page.value) {
   try {
     const response = await fetch(`/api/sms?page=${targetPage}`)
     const data = await readJson(response)
+    if (!authenticated.value) return
 
     messages.value = data.messages
     page.value = data.page
@@ -110,6 +159,7 @@ async function loadMessages(targetPage = page.value) {
     unread.value = data.unread
     if (data.pageSize) pageSize.value = data.pageSize
     selectedIds.value = []
+    writeDataCache()
   } catch (cause) {
     if (authenticated.value) error.value = cause.message
   } finally {
@@ -132,7 +182,7 @@ function navigate(pageName) {
   leaveSelectionMode()
   window.history.replaceState(null, '', `#${pageName}`)
   window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-  loadActivePage()
+  loadActivePage({ force: true })
 }
 
 function handleNavigationChange(event) {
@@ -261,6 +311,7 @@ async function openMessage(message) {
   unread.value = Math.max(0, unread.value - 1)
   try {
     await postAction(`/api/sms/${message.id}/read`)
+    writeDataCache()
   } catch (cause) {
     message.read = false
     unread.value += 1
@@ -316,6 +367,7 @@ async function markAllRead() {
     await postAction('/api/sms/read-all')
     messages.value.forEach((message) => { message.read = true })
     unread.value = 0
+    writeDataCache()
     showFeedback('所有短信已标记为已读')
   } catch (cause) {
     error.value = `全部已读失败：${cause.message}`
@@ -337,6 +389,11 @@ async function deleteMessages(ids) {
     await postAction('/api/sms/delete', { ids })
     if (selected.value && ids.includes(selected.value.id)) closeMessageDialog()
     const remainingTotal = Math.max(0, total.value - ids.length)
+    unread.value = Math.max(0, unread.value - messages.value.filter((message) => ids.includes(message.id) && !message.read).length)
+    messages.value = messages.value.filter((message) => !ids.includes(message.id))
+    total.value = remainingTotal
+    selectedIds.value = []
+    writeDataCache()
     const targetPage = Math.min(page.value, Math.max(1, Math.ceil(remainingTotal / pageSize.value)))
     await loadMessages(targetPage)
     showFeedback(ids.length === 1 ? '短信已删除' : `已删除 ${ids.length} 条短信`)
@@ -355,6 +412,12 @@ async function clearInbox() {
   try {
     await postAction('/api/sms/clear')
     closeMessageDialog()
+    messages.value = []
+    total.value = 0
+    unread.value = 0
+    page.value = 1
+    selectedIds.value = []
+    writeDataCache()
     await loadMessages(1)
     showFeedback('收件箱已清空')
   } catch (cause) {
@@ -378,6 +441,7 @@ onBeforeUnmount(() => navigationMedia.removeEventListener('change', updateNaviga
 </script>
 
 <template>
+  <mdui-linear-progress v-if="globalLoading" class="global-loading" aria-label="正在加载"></mdui-linear-progress>
   <main v-if="authChecking && !authenticated" class="auth-screen">
     <mdui-card variant="elevated" class="auth-card auth-loading-card">
       <span class="brand-mark" aria-hidden="true">C</span>
@@ -466,7 +530,7 @@ onBeforeUnmount(() => navigationMedia.removeEventListener('change', updateNaviga
       </mdui-card>
 
       <template v-if="activePage === 'overview'">
-        <OverviewPage :data="overview" :loading="overviewLoading" />
+        <OverviewPage :data="overview" />
       </template>
 
       <template v-else>
@@ -508,7 +572,6 @@ onBeforeUnmount(() => navigationMedia.removeEventListener('change', updateNaviga
     </section>
 
     <mdui-card variant="outlined" class="inbox" :class="{ muted: loading || actionLoading, 'selection-mode': selectionMode }">
-      <mdui-linear-progress v-if="loading || actionLoading"></mdui-linear-progress>
       <div class="inbox-head">
         <label v-if="selectionMode" class="check-cell" title="选择本页全部短信">
           <mdui-checkbox
