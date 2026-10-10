@@ -5,8 +5,21 @@ const props = defineProps({
   data: { type: Object, default: null },
 })
 
+const operatorNames = new Map([
+  ['china telecom', '中国电信'],
+  ['china mobile', '中国移动'],
+  ['china unicom', '中国联通'],
+  ['china broadnet', '中国广电'],
+  ['china broadcasting network', '中国广电'],
+])
+
+const networkDescription = computed(() => {
+  const operator = props.data?.operator?.trim() || ''
+  const name = operatorNames.get(operator.toLowerCase()) || operator
+  return [name, props.data?.networkType].filter(Boolean).join(' ') || '网络状态'
+})
+
 const signalLevel = computed(() => props.data?.signal?.level ?? 0)
-const signalLabel = computed(() => ['无信号', '较弱', '一般', '良好', '强', '极强'][signalLevel.value] || '未知')
 
 function formatDuration(seconds) {
   if (!Number.isFinite(seconds)) return '—'
@@ -41,26 +54,13 @@ function formatGigabytes(value) {
           </div>
           <div>
             <h2>移动网络</h2>
-            <p>{{ data?.networkType || '网络状态' }}</p>
+            <p>{{ networkDescription }}</p>
+          </div>
+          <div class="signal-bars" role="img" :aria-label="`信号强度 ${signalLevel} 格`">
+            <span v-for="bar in 5" :key="bar" :class="{ active: bar <= signalLevel }"></span>
           </div>
         </div>
 
-        <div class="category-content network-content">
-          <div class="info-item">
-            <span class="metric-label">运营商</span>
-            <strong>{{ data?.operator || '—' }}</strong>
-          </div>
-          <div class="info-item signal-info">
-            <div>
-              <span class="metric-label">信号强度</span>
-              <strong>{{ signalLabel }}</strong>
-              <small>{{ data?.signal?.connected ? `${signalLevel} / 5 格` : '移动网络未连接' }}</small>
-            </div>
-            <div class="signal-bars" :aria-label="`信号强度 ${signalLevel} 格`">
-              <span v-for="bar in 5" :key="bar" :class="{ active: bar <= signalLevel }"></span>
-            </div>
-          </div>
-        </div>
       </mdui-card>
 
       <mdui-card variant="outlined" class="category-card device-card">
@@ -120,12 +120,8 @@ function formatGigabytes(value) {
 
       <div class="traffic-details">
         <div>
-          <span>已使用</span>
-          <strong>{{ formatGigabytes(data?.traffic?.usedGigabytes) }}</strong>
-        </div>
-        <div>
-          <span>月度限额</span>
-          <strong>{{ data?.traffic?.enabled ? formatGigabytes(data.traffic.limitGigabytes) : '未设置' }}</strong>
+          <span>已使用 / 月度限额</span>
+          <strong>{{ formatGigabytes(data?.traffic?.usedGigabytes) }} / {{ data?.traffic?.enabled ? formatGigabytes(data.traffic.limitGigabytes) : '未设置' }}</strong>
         </div>
       </div>
     </mdui-card>
