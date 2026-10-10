@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { confirm as confirmDialog } from 'mdui/functions/confirm.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import IconTooltipButton from './components/IconTooltipButton.vue'
+import OverviewPage from './components/OverviewPage.vue'
 
 const AUTH_HINT_KEY = 'cpe-dashboard-authenticated'
 
@@ -15,7 +16,13 @@ function readAuthHint() {
 }
 
 const hasAuthHint = readAuthHint()
+const initialPage = window.location.hash === '#sms' ? 'sms' : 'overview'
+const navigationMedia = window.matchMedia('(max-width: 760px)')
 
+const activePage = ref(initialPage)
+const compactNavigation = ref(navigationMedia.matches)
+const overview = ref(null)
+const overviewLoading = ref(false)
 const messages = ref([])
 const page = ref(1)
 const total = ref(0)
@@ -23,7 +30,6 @@ const unread = ref(0)
 const pageSize = ref(10)
 const loading = ref(false)
 const error = ref('')
-const refreshedAt = ref('')
 const selected = ref(null)
 const messageDialogOpen = ref(false)
 const authChecking = ref(hasAuthHint)
@@ -34,6 +40,8 @@ const authLoading = ref(false)
 const selectedIds = ref([])
 const selectionMode = ref(false)
 const actionLoading = ref(false)
+
+const pageTitle = computed(() => activePage.value === 'overview' ? '概览' : '短信收件箱')
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const allPageSelected = computed(() => (
@@ -70,9 +78,23 @@ async function readJson(response) {
   if (response.status === 401) {
     setAuthenticated(false)
     messages.value = []
+    overview.value = null
   }
   if (!response.ok) throw new Error(data.error || '请求失败')
   return data
+}
+
+async function loadOverview() {
+  overviewLoading.value = true
+  error.value = ''
+  try {
+    const response = await fetch('/api/overview')
+    overview.value = await readJson(response)
+  } catch (cause) {
+    if (authenticated.value) error.value = cause.message
+  } finally {
+    overviewLoading.value = false
+  }
 }
 
 async function loadMessages(targetPage = page.value) {
@@ -88,11 +110,6 @@ async function loadMessages(targetPage = page.value) {
     unread.value = data.unread
     if (data.pageSize) pageSize.value = data.pageSize
     selectedIds.value = []
-    refreshedAt.value = new Date().toLocaleTimeString('zh-CN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    })
   } catch (cause) {
     if (authenticated.value) error.value = cause.message
   } finally {
@@ -100,12 +117,42 @@ async function loadMessages(targetPage = page.value) {
   }
 }
 
+async function loadActivePage({ force = false } = {}) {
+  if (activePage.value === 'overview') {
+    if (force || !overview.value) await loadOverview()
+    return
+  }
+  if (force || messages.value.length === 0) await loadMessages(page.value)
+}
+
+function navigate(pageName) {
+  if (!['overview', 'sms'].includes(pageName) || pageName === activePage.value) return
+  activePage.value = pageName
+  error.value = ''
+  leaveSelectionMode()
+  window.history.replaceState(null, '', `#${pageName}`)
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  loadActivePage()
+}
+
+function handleNavigationChange(event) {
+  navigate(event.target.value)
+}
+
+function updateNavigationMode(event) {
+  compactNavigation.value = event.matches
+}
+
+function retryActivePage() {
+  loadActivePage({ force: true })
+}
+
 async function checkSession() {
   try {
     const response = await fetch('/api/auth/session')
     const data = await readJson(response)
     setAuthenticated(data.authenticated)
-    if (authenticated.value) await loadMessages(1)
+    if (authenticated.value) await loadActivePage({ force: true })
   } catch (cause) {
     if (authenticated.value) error.value = `登录状态验证失败：${cause.message}`
     else authError.value = cause.message
@@ -126,7 +173,7 @@ async function login() {
     await readJson(response)
     setAuthenticated(true)
     password.value = ''
-    await loadMessages(1)
+    await loadActivePage({ force: true })
   } catch (cause) {
     authError.value = cause.message
   } finally {
@@ -138,6 +185,7 @@ async function logout() {
   await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
   setAuthenticated(false)
   messages.value = []
+  overview.value = null
   messageDialogOpen.value = false
   selected.value = null
   error.value = ''
@@ -321,7 +369,12 @@ function changePage(direction) {
   if (next >= 1 && next <= totalPages.value) loadMessages(next)
 }
 
-onMounted(checkSession)
+onMounted(() => {
+  navigationMedia.addEventListener('change', updateNavigationMode)
+  checkSession()
+})
+
+onBeforeUnmount(() => navigationMedia.removeEventListener('change', updateNavigationMode))
 </script>
 
 <template>
@@ -362,18 +415,36 @@ onMounted(checkSession)
     </mdui-card>
   </main>
 
-  <main v-else class="shell">
-    <header class="topbar">
+  <template v-else>
+    <mdui-navigation-rail
+      v-if="!compactNavigation"
+      :value="activePage"
+      alignment="start"
+      divider
+      aria-label="主导航"
+      @change="handleNavigationChange"
+    >
+      <mdui-navigation-rail-item value="overview">
+        概览
+        <mdui-icon slot="icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg></mdui-icon>
+        <mdui-icon slot="active-icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg></mdui-icon>
+      </mdui-navigation-rail-item>
+      <mdui-navigation-rail-item value="sms">
+        短信
+        <mdui-icon slot="icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg></mdui-icon>
+        <mdui-icon slot="active-icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg></mdui-icon>
+        <mdui-badge v-if="unread" slot="badge">{{ unread > 99 ? '99+' : unread }}</mdui-badge>
+      </mdui-navigation-rail-item>
+    </mdui-navigation-rail>
+
+    <main class="shell" :class="`page-${activePage}`">
+      <header class="topbar">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true">C</span>
         <div class="brand-content">
           <p class="eyebrow">CPE DASHBOARD</p>
           <div class="title-row">
-            <h1>短信收件箱</h1>
-            <span class="sync-time">
-              <span class="status-dot"></span>
-              {{ refreshedAt ? `最后同步 ${refreshedAt}` : '正在连接设备' }}
-            </span>
+            <h1>{{ pageTitle }}</h1>
           </div>
         </div>
       </div>
@@ -382,18 +453,23 @@ onMounted(checkSession)
           <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5-5-5zM4 5h8V3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8v-2H4V5z"/></svg></mdui-icon>
         </IconTooltipButton>
       </div>
-    </header>
+      </header>
 
-    <mdui-card v-if="error" variant="filled" class="notice error-notice">
+      <mdui-card v-if="error" variant="filled" class="notice error-notice">
       <div>
         <strong>操作遇到问题</strong>
         <span>{{ error }}</span>
       </div>
-      <IconTooltipButton content="重试" placement="left" class="danger-action" aria-label="重试" @click="loadMessages(page)">
+      <IconTooltipButton content="重试" placement="left" class="danger-action" aria-label="重试" @click="retryActivePage">
         <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.1A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></mdui-icon>
       </IconTooltipButton>
-    </mdui-card>
+      </mdui-card>
 
+      <template v-if="activePage === 'overview'">
+        <OverviewPage :data="overview" :loading="overviewLoading" />
+      </template>
+
+      <template v-else>
     <section class="inbox-toolbar" aria-label="短信工具区">
       <div class="toolbar-primary-actions">
         <IconTooltipButton
@@ -507,5 +583,27 @@ onMounted(checkSession)
         <mdui-button slot="action" variant="text" @click="closeMessageDialog">关闭</mdui-button>
       </template>
     </mdui-dialog>
-  </main>
+      </template>
+    </main>
+
+    <mdui-navigation-bar
+      v-if="compactNavigation"
+      :value="activePage"
+      label-visibility="labeled"
+      aria-label="主导航"
+      @change="handleNavigationChange"
+    >
+      <mdui-navigation-bar-item value="overview">
+        概览
+        <mdui-icon slot="icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg></mdui-icon>
+        <mdui-icon slot="active-icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg></mdui-icon>
+      </mdui-navigation-bar-item>
+      <mdui-navigation-bar-item value="sms">
+        短信
+        <mdui-icon slot="icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg></mdui-icon>
+        <mdui-icon slot="active-icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg></mdui-icon>
+        <mdui-badge v-if="unread" slot="badge">{{ unread > 99 ? '99+' : unread }}</mdui-badge>
+      </mdui-navigation-bar-item>
+    </mdui-navigation-bar>
+  </template>
 </template>

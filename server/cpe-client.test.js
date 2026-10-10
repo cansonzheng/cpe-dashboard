@@ -54,6 +54,28 @@ test('SMS mutations use the original device command payloads', async () => {
   ])
 })
 
+test('overview status uses the three read-only device commands', async () => {
+  const client = Object.create(CpeClient.prototype)
+  const payloads = []
+  client.authenticatedRequest = async (payload) => {
+    payloads.push(payload)
+    return { cmd: payload.cmd }
+  }
+
+  const status = await client.getOverviewStatus()
+
+  assert.deepEqual(payloads, [
+    { cmd: 1001, method: 'GET' },
+    { cmd: 1002, method: 'GET' },
+    { cmd: 337, method: 'GET' },
+  ])
+  assert.deepEqual(status, {
+    device: { cmd: 1001 },
+    network: { cmd: 1002 },
+    traffic: { cmd: 337 },
+  })
+})
+
 for (const code of ['NO_AUTH', 'LOGIN_TIMEOUT']) {
   test(`authenticated requests renew the session once after ${code}`, async () => {
     const client = Object.create(CpeClient.prototype)

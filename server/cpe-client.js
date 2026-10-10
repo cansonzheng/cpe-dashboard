@@ -7,6 +7,9 @@ const COMMANDS = Object.freeze({
   LOGIN: 100,
   LOGOUT: 101,
   GET_NEXT_LOGIN_TIME: 232,
+  TRAFFIC_LIMIT_SETTING: 337,
+  DEVICE_INFO: 1001,
+  NETWORK_INFO: 1002,
 })
 
 const SESSION_EXPIRED_CODES = new Set(['NO_AUTH', 'LOGIN_TIMEOUT'])
@@ -140,6 +143,16 @@ export class CpeClient {
       cmd: COMMANDS.SMS_SETTING,
       method: 'GET',
     })
+  }
+
+  async getOverviewStatus() {
+    const [device, network, traffic] = await Promise.all([
+      this.authenticatedRequest({ cmd: COMMANDS.DEVICE_INFO, method: 'GET' }),
+      this.authenticatedRequest({ cmd: COMMANDS.NETWORK_INFO, method: 'GET' }),
+      this.authenticatedRequest({ cmd: COMMANDS.TRAFFIC_LIMIT_SETTING, method: 'GET' }),
+    ])
+
+    return { device, network, traffic }
   }
 
   async getInbox(page = 1) {

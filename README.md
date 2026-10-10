@@ -1,8 +1,11 @@
 # cpe-dashboard
 
-一个基于 Koa 和 Vue 3 的轻量 CPE 设备管理面板。目前提供短信收件箱功能，后续可以继续扩展设备状态、网络配置等管理模块。设备账号、密码和会话均只存在于服务端，页面使用独立访问密码保护。
+一个基于 Koa 和 Vue 3 的轻量 CPE 设备管理面板。目前提供设备概览和短信收件箱，后续可以继续扩展网络配置等管理模块。设备账号、密码和会话均只存在于服务端，页面使用独立访问密码保护。
 
-## 当前功能：短信收件箱
+## 当前功能
+
+- 概览：展示运行时间、运营商、信号、内存和月度流量状态
+- 短信：分页浏览收件箱、标记已读、批量删除和清空
 
 ### 已提取的设备接口
 
@@ -16,6 +19,9 @@
 | 14 | 删除短信、清空收件箱 | `index`, `subcmd: 0` |
 | 16 | 查询短信设置 | `sessionId` |
 | 101 | 退出登录 | `sessionId`, `token` |
+| 337 | 查询流量设置及月度用量 | `sessionId` |
+| 1001 | 查询设备运行时间和内存 | `sessionId` |
+| 1002 | 查询运营商和信号状态 | `sessionId` |
 
 登录密码字段为 `SHA-256(token + password)`。短信列表的 `sms_list` 是逗号分隔的 Base64 字符串；解码后格式为：
 
@@ -123,6 +129,7 @@ docker run --env-file .env -p 3100:3100 cpe-dashboard
 - `GET /api/auth/session`：查询页面登录状态
 - `POST /api/auth/login`：使用密码登录
 - `POST /api/auth/logout`：退出登录
+- `GET /api/overview`：设备状态与流量概览
 - `GET /api/sms?page=1`：分页短信列表
 - `GET /api/sms/settings`：短信功能配置摘要
 - `POST /api/sms/:id/read`：将单条短信标为已读
@@ -130,7 +137,7 @@ docker run --env-file .env -p 3100:3100 cpe-dashboard
 - `POST /api/sms/delete`：删除所选短信，JSON 请求体为 `{ "ids": ["1", "2"] }`
 - `POST /api/sms/clear`：清空收件箱
 
-短信相关接口均要求登录。
+概览和短信相关接口均要求登录。
 
 ## PWA
 

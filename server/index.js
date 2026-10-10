@@ -8,6 +8,7 @@ import { bodyParser } from '@koa/bodyparser'
 import serve from 'koa-static'
 import { createPasswordAuth } from './auth.js'
 import { CpeClient } from './cpe-client.js'
+import { normalizeOverview } from './overview.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = new Koa()
@@ -76,6 +77,11 @@ router.post('/auth/login', (ctx) => {
 router.post('/auth/logout', (ctx) => {
   auth.clearSession(ctx)
   ctx.body = { authenticated: false }
+})
+
+router.get('/overview', auth.requireAuth, async (ctx) => {
+  const status = await getClient().getOverviewStatus()
+  ctx.body = normalizeOverview(status)
 })
 
 router.get('/sms/settings', auth.requireAuth, async (ctx) => {

@@ -2,7 +2,7 @@
 
 ## Project overview
 
-This repository contains `cpe-dashboard`, a lightweight and extensible CPE management application. SMS inbox browsing is its first feature, but the project may gain additional device-management modules:
+This repository contains `cpe-dashboard`, a lightweight and extensible CPE management application. It currently provides a device overview and SMS inbox, and may gain additional device-management modules:
 
 - The backend uses Koa and talks to the CPE management API.
 - The frontend uses Vue 3 and Vite.
@@ -18,10 +18,13 @@ server/
   index.js             Koa application and public API routes
   cpe-client.js        CPE authentication, requests, and SMS decoding
   cpe-client.test.js   Node.js unit tests for the device protocol parser
+  overview.js          Browser-safe overview response normalization
+  overview.test.js     Overview normalization unit tests
   auth.js              Browser password authentication and long-lived cookies
   auth.test.js         Authentication unit tests
 src/
-  App.vue              Main inbox view and client-side data loading
+  App.vue              Application shell, navigation, auth, and data loading
+  components/OverviewPage.vue  Device and traffic overview presentation
   main.js              Vue application entry point
   styles.css           Global and responsive styles
 index.html              Vite HTML entry point
@@ -109,6 +112,7 @@ The public Koa API currently contains:
 - `GET /api/auth/session`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
+- `GET /api/overview`
 - `GET /api/sms?page=1`
 - `GET /api/sms/settings`
 - `POST /api/sms/:id/read`
@@ -138,6 +142,9 @@ Known commands:
 | `14` | Delete inbox messages |
 | `16` | Read SMS settings |
 | `101` | Log out |
+| `337` | Read traffic limit settings and monthly usage |
+| `1001` | Read device uptime and memory status |
+| `1002` | Read mobile operator and signal status |
 
 Authentication rules:
 
