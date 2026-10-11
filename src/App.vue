@@ -74,7 +74,7 @@ const globalLoading = computed(() => (
   authChecking.value || authLoading.value || overviewLoading.value || loading.value || actionLoading.value
 ))
 
-const pageTitle = computed(() => activePage.value === 'overview' ? '概览' : '短信收件箱')
+const pageTitle = computed(() => activePage.value === 'overview' ? '概览' : '短信')
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const allPageSelected = computed(() => (
@@ -229,18 +229,6 @@ async function login() {
   } finally {
     authLoading.value = false
   }
-}
-
-async function logout() {
-  await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
-  setAuthenticated(false)
-  messages.value = []
-  overview.value = null
-  messageDialogOpen.value = false
-  selected.value = null
-  error.value = ''
-  selectionMode.value = false
-  selectedIds.value = []
 }
 
 async function postAction(url, body) {
@@ -441,7 +429,6 @@ onBeforeUnmount(() => navigationMedia.removeEventListener('change', updateNaviga
 </script>
 
 <template>
-  <mdui-linear-progress v-if="globalLoading" class="global-loading" aria-label="正在加载"></mdui-linear-progress>
   <main v-if="authChecking && !authenticated" class="auth-screen">
     <mdui-card variant="elevated" class="auth-card auth-loading-card">
       <span class="brand-mark" aria-hidden="true">C</span>
@@ -480,6 +467,14 @@ onBeforeUnmount(() => navigationMedia.removeEventListener('change', updateNaviga
   </main>
 
   <template v-else>
+    <mdui-top-app-bar variant="center-aligned" class="app-header" role="banner">
+      <span class="app-header-spacer" aria-hidden="true"></span>
+      <mdui-top-app-bar-title><h1 class="app-header-title">{{ pageTitle }}</h1></mdui-top-app-bar-title>
+      <IconTooltipButton content="刷新" placement="bottom-end" aria-label="刷新" :loading="overviewLoading || loading" :disabled="globalLoading" @click="retryActivePage">
+        <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.1A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></mdui-icon>
+      </IconTooltipButton>
+    </mdui-top-app-bar>
+
     <mdui-navigation-rail
       v-if="!compactNavigation"
       :value="activePage"
@@ -502,23 +497,6 @@ onBeforeUnmount(() => navigationMedia.removeEventListener('change', updateNaviga
     </mdui-navigation-rail>
 
     <main class="shell" :class="`page-${activePage}`">
-      <header class="topbar">
-      <div class="brand">
-        <span class="brand-mark" aria-hidden="true">C</span>
-        <div class="brand-content">
-          <p class="eyebrow">CPE DASHBOARD</p>
-          <div class="title-row">
-            <h1>{{ pageTitle }}</h1>
-          </div>
-        </div>
-      </div>
-      <div class="top-actions">
-        <IconTooltipButton content="退出登录" placement="bottom-end" aria-label="退出登录" @click="logout">
-          <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5-5-5zM4 5h8V3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8v-2H4V5z"/></svg></mdui-icon>
-        </IconTooltipButton>
-      </div>
-      </header>
-
       <mdui-card v-if="error" variant="filled" class="notice error-notice">
       <div>
         <strong>操作遇到问题</strong>
@@ -545,9 +523,6 @@ onBeforeUnmount(() => navigationMedia.removeEventListener('change', updateNaviga
         >
           <mdui-icon v-if="selectionMode"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.41 4.29 19.71 2.88 18.3 9.17 12 2.88 5.7 4.29 4.29 10.59 10.59 16.89 4.29z"/></svg></mdui-icon>
           <mdui-icon v-else><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 7h-9v2h9V7zm0 8h-9v2h9v-2zM5.54 11 2 7.46l1.41-1.41 2.13 2.13 4.25-4.25 1.41 1.41L5.54 11zm0 8L2 15.46l1.41-1.41 2.13 2.13 4.25-4.25 1.41 1.41L5.54 19z"/></svg></mdui-icon>
-        </IconTooltipButton>
-        <IconTooltipButton content="刷新" variant="outlined" aria-label="刷新" :loading="loading" :disabled="loading" @click="loadMessages(page)">
-          <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.1A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></mdui-icon>
         </IconTooltipButton>
         <span class="toolbar-unread">未读 {{ unread }} 条</span>
       </div>

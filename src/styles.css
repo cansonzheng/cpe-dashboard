@@ -9,7 +9,6 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--dashboard-background); }
 button { font: inherit; }
-.global-loading { position: fixed; top: 0; right: 0; left: 0; z-index: 3000; display: block; width: 100%; pointer-events: none; --shape-corner: 0; }
 
 .auth-screen {
   display: grid;
@@ -33,14 +32,14 @@ button { font: inherit; }
 .auth-loading-card p { margin: 14px 0 0; }
 
 .shell { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 40px 0 56px; }
-.topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
-.brand { display: flex; align-items: center; gap: 16px; }
-.brand-content { min-width: 0; }
+.app-header { background-color: rgb(var(--mdui-color-primary)); color: rgb(var(--mdui-color-on-primary)); }
+.app-header mdui-top-app-bar-title { color: rgb(var(--mdui-color-on-primary)); font-size: var(--mdui-typescale-title-medium-size); font-weight: var(--mdui-typescale-title-medium-weight); letter-spacing: var(--mdui-typescale-title-medium-tracking); }
+.app-header mdui-button-icon { color: rgb(var(--mdui-color-on-primary)); }
+.app-header mdui-button-icon::part(loading) { stroke: rgb(var(--mdui-color-on-primary)); }
+.app-header-title { margin: 0; font: inherit; }
+.app-header-spacer { width: 40px; height: 40px; }
 .brand-mark { display: grid; place-items: center; width: 48px; height: 48px; color: rgb(var(--mdui-color-on-primary)); background: rgb(var(--mdui-color-primary)); border-radius: var(--mdui-shape-corner-large); font-size: 22px; font-weight: 700; box-shadow: var(--mdui-elevation-level2); }
 .eyebrow { margin: 0 0 4px; color: rgb(var(--mdui-color-on-surface-variant)); font-size: 10px; font-weight: 700; letter-spacing: .18em; }
-.title-row { display: flex; align-items: center; gap: 18px; }
-h1 { margin: 0; font-size: 28px; font-weight: 500; line-height: 1.15; }
-.top-actions { display: flex; align-items: center; gap: 8px; }
 .action-icon { display: block; width: 24px; height: 24px; fill: currentColor; }
 mdui-tooltip { display: inline-flex; }
 mdui-navigation-rail { background: rgb(var(--mdui-color-surface-container-low)); }
@@ -58,7 +57,7 @@ mdui-navigation-rail { background: rgb(var(--mdui-color-surface-container-low));
 .selection-count { color: rgb(var(--mdui-color-on-surface-variant)); font-size: 13px; }
 .danger-action { --mdui-color-primary: var(--mdui-color-error); --mdui-color-on-primary: var(--mdui-color-on-error); --mdui-color-primary-container: var(--mdui-color-error-container); --mdui-color-on-primary-container: var(--mdui-color-on-error-container); }
 
-.overview { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'network traffic' 'device device'; gap: 16px; }
+.overview { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: 'network' 'traffic' 'device'; gap: 16px; }
 .overview-grid { display: contents; }
 .network-card { grid-area: network; }
 .device-card { grid-area: device; }
@@ -125,22 +124,19 @@ mdui-navigation-rail { background: rgb(var(--mdui-color-surface-container-low));
 
 @media (max-width: 760px) {
   .shell { width: min(100% - 24px, 1180px); padding: 24px 0 44px; }
-  .topbar { align-items: flex-start; }
-  .title-row { flex-direction: column; align-items: flex-start; gap: 8px; }
   .inbox-head { display: none; }
   .message-row { grid-template-columns: minmax(0, 1fr); padding: 0 12px; }
   .inbox.selection-mode .message-row { grid-template-columns: 34px minmax(0, 1fr); gap: 8px; }
   .message-open { grid-template-columns: 1fr auto; gap: 8px 16px; padding: 15px 0; }
   .content-cell { grid-column: 1 / -1; grid-row: 2; }
   .message-open time { grid-column: 2; grid-row: 1; }
-  .overview { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'network' 'traffic' 'device'; gap: 12px; }
+  .overview { gap: 12px; }
   .category-card { padding: 20px; }
   .traffic-card { padding: 22px 20px; }
   .traffic-details > div { padding: 14px 12px; }
 }
 
 @media (max-width: 460px) {
-  .topbar { align-items: flex-start; }
   .brand-mark { display: none; }
   .auth-card { padding: 30px 24px; }
   .auth-card .brand-mark { display: grid; }
