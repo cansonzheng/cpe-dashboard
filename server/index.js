@@ -54,6 +54,11 @@ app.use(async (ctx, next) => {
 
 app.use(bodyParser({ enableTypes: ['json'], jsonLimit: '16kb' }))
 
+app.use(async (ctx, next) => {
+  if (ctx.path.startsWith('/api/')) ctx.set('Cache-Control', 'no-store')
+  await next()
+})
+
 router.get('/health', (ctx) => {
   ctx.body = {
     ok: true,

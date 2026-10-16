@@ -59,6 +59,7 @@ const total = ref(Number.isFinite(cachedInbox?.total) ? cachedInbox.total : 0)
 const unread = ref(Number.isFinite(cachedInbox?.unread) ? cachedInbox.unread : 0)
 const pageSize = ref(Number.isFinite(cachedInbox?.pageSize) && cachedInbox.pageSize > 0 ? cachedInbox.pageSize : 10)
 const loading = ref(false)
+let inboxRequestId = 0
 const error = ref('')
 const selected = ref(null)
 const messageDialogOpen = ref(false)
@@ -133,7 +134,7 @@ async function loadOverview() {
   overviewLoading.value = true
   error.value = ''
   try {
-    const response = await fetch('/api/overview')
+    const response = await fetch('/api/overview', { cache: 'no-store' })
     const data = await readJson(response)
     if (!authenticated.value) return
     overview.value = data
@@ -146,12 +147,16 @@ async function loadOverview() {
 }
 
 async function loadMessages(targetPage = page.value) {
+  const requestId = ++inboxRequestId
   loading.value = true
   error.value = ''
   try {
-    const response = await fetch(`/api/sms?page=${targetPage}`)
+    const response = await fetch(`/api/sms?page=${targetPage}&_=${Date.now()}`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(45_000),
+    })
     const data = await readJson(response)
-    if (!authenticated.value) return
+    if (!authenticated.value || requestId !== inboxRequestId) return
 
     messages.value = data.messages
     page.value = data.page
@@ -161,18 +166,18 @@ async function loadMessages(targetPage = page.value) {
     selectedIds.value = []
     writeDataCache()
   } catch (cause) {
-    if (authenticated.value) error.value = cause.message
+    if (authenticated.value && requestId === inboxRequestId) error.value = cause.message
   } finally {
-    loading.value = false
+    if (requestId === inboxRequestId) loading.value = false
   }
 }
 
-async function loadActivePage({ force = false } = {}) {
+async function loadActivePage() {
   if (activePage.value === 'overview') {
-    if (force || !overview.value) await loadOverview()
+    if (!overviewLoading.value) await loadOverview()
     return
   }
-  if (force || messages.value.length === 0) await loadMessages(page.value)
+  if (!actionLoading.value) await loadMessages(1)
 }
 
 function navigate(pageName) {
@@ -182,7 +187,7 @@ function navigate(pageName) {
   leaveSelectionMode()
   window.history.replaceState(null, '', `#${pageName}`)
   window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-  loadActivePage({ force: true })
+  loadActivePage()
 }
 
 function handleNavigationChange(event) {
@@ -194,15 +199,24 @@ function updateNavigationMode(event) {
 }
 
 function retryActivePage() {
-  loadActivePage({ force: true })
+  loadActivePage()
+}
+
+function refreshOnReturn() {
+  if (document.visibilityState !== 'visible' || !authenticated.value || authChecking.value || authLoading.value) return
+  loadActivePage()
+}
+
+function handlePageShow(event) {
+  if (event.persisted) refreshOnReturn()
 }
 
 async function checkSession() {
   try {
-    const response = await fetch('/api/auth/session')
+    const response = await fetch('/api/auth/session', { cache: 'no-store' })
     const data = await readJson(response)
     setAuthenticated(data.authenticated)
-    if (authenticated.value) await loadActivePage({ force: true })
+    if (authenticated.value) await loadActivePage()
   } catch (cause) {
     if (authenticated.value) error.value = `登录状态验证失败：${cause.message}`
     else authError.value = cause.message
@@ -223,7 +237,7 @@ async function login() {
     await readJson(response)
     setAuthenticated(true)
     password.value = ''
-    await loadActivePage({ force: true })
+    await loadActivePage()
   } catch (cause) {
     authError.value = cause.message
   } finally {
@@ -422,10 +436,16 @@ function changePage(direction) {
 
 onMounted(() => {
   navigationMedia.addEventListener('change', updateNavigationMode)
+  document.addEventListener('visibilitychange', refreshOnReturn)
+  window.addEventListener('pageshow', handlePageShow)
   checkSession()
 })
 
-onBeforeUnmount(() => navigationMedia.removeEventListener('change', updateNavigationMode))
+onBeforeUnmount(() => {
+  navigationMedia.removeEventListener('change', updateNavigationMode)
+  document.removeEventListener('visibilitychange', refreshOnReturn)
+  window.removeEventListener('pageshow', handlePageShow)
+})
 </script>
 
 <template>

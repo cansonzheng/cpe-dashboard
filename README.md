@@ -85,6 +85,17 @@ node server/index.mjs
 
 运行前需要通过环境变量或 `.env` 提供设备及页面登录配置。
 
+## 远程部署
+
+本机需要安装 `sshpass`、`rsync` 和 `ssh`。在 `scripts/deploy.sh` 开头设置服务器主机、用户名、密码、部署目录和容器名称，然后运行：
+
+```bash
+pnpm build
+pnpm run deploy
+```
+
+脚本使用 `sshpass` 提供密码，将 `dist` 通过 rsync 上传到服务器的 `/docker/cpe-dashboard/dist`，成功后执行 `docker restart cpe-dashboard`。上传失败时会停止，不会重启容器；部署脚本本身不会自动构建。脚本中的密码初始为占位值，填写真实密码后不要提交到仓库。
+
 ## Docker Compose
 
 先在宿主机生成一次自包含产物：
@@ -144,5 +155,9 @@ docker run --env-file .env -p 3100:3100 cpe-dashboard
 生产构建会生成 Web App Manifest 和 Service Worker，可将 cpe-dashboard 安装为独立应用。应用外壳支持离线打开，但设备 API 始终使用网络请求且不会被 Service Worker 缓存。
 
 页面会在当前浏览器的 localStorage 中保留最近成功加载的概览和一页短信（包含正文）。已有登录凭据时，重新打开页面先显示这些数据，再联网更新；请求失败时保留已有数据。标记已读、删除或清空后会更新缓存，退出登录或确认登录失效时会清除缓存。缓存不包含访问密码、设备凭据或会话信息。
+
+首次加载、切换页面、从后台回到应用或恢复浏览器历史页面时，都会重新请求当前页面的数据。数据请求使用 `cache: 'no-store'` 绕过 HTTP 缓存，成功后替换页面内容及本地快照；后台刷新期间已有内容继续显示。
+
+进入短信、返回应用或点击刷新时，始终请求第一页以获取最新短信，不沿用缓存的旧页码；翻页按钮仍可浏览历史短信。短信请求带独立时间参数，服务端所有 API 响应设置 `Cache-Control: no-store`，避免浏览器和代理复用旧响应。并发请求只应用最后发起请求的结果。
 
 Service Worker 仅能在 HTTPS 或 `localhost` 安全上下文中注册。通过局域网 IP 在手机上安装时，需要为服务配置 HTTPS。

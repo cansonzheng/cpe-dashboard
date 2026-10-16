@@ -8,7 +8,7 @@
     "dev": "concurrently -k -n server,web -c blue,green \"pnpm run dev:server\" \"pnpm run dev:web\"",
     "dev:server": "node --watch server/index.js",
     "dev:web": "vite",
-    "deploy":"rsync -av dist root@192.168.20.1:/docker/cpe-dashboard",
+    "deploy": "bash scripts/deploy.sh",
     "build": "node scripts/build-release.mjs",
     "build:web": "vite build --outDir dist/public",
     "start": "node server/index.js",
