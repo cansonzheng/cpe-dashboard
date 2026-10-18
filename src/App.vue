@@ -4,6 +4,7 @@ import { confirm as confirmDialog } from 'mdui/functions/confirm.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import IconTooltipButton from './components/IconTooltipButton.vue'
 import OverviewPage from './components/OverviewPage.vue'
+import { extractVerificationCode, getVerificationMessages } from './verification-code.js'
 
 const AUTH_HINT_KEY = 'cpe-dashboard-authenticated'
 const DATA_CACHE_KEY = 'cpe-dashboard-data-v1'
@@ -54,6 +55,7 @@ const compactNavigation = ref(navigationMedia.matches)
 const overview = ref(cachedData.overview && typeof cachedData.overview === 'object' ? cachedData.overview : null)
 const overviewLoading = ref(false)
 const messages = ref(cachedInbox?.messages || [])
+const firstPageMessages = ref(cachedInbox?.page === 1 ? cachedInbox.messages : [])
 const page = ref(Number.isInteger(cachedInbox?.page) && cachedInbox.page > 0 ? cachedInbox.page : 1)
 const total = ref(Number.isFinite(cachedInbox?.total) ? cachedInbox.total : 0)
 const unread = ref(Number.isFinite(cachedInbox?.unread) ? cachedInbox.unread : 0)
@@ -81,17 +83,15 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.v
 const allPageSelected = computed(() => (
   messages.value.length > 0 && messages.value.every((message) => selectedIds.value.includes(message.id))
 ))
-const verificationCode = computed(() => {
-  const content = selected.value?.content
-  if (!content?.includes('验证码')) return ''
-  return content.match(/(?:^|\D)(\d{4,6})(?!\d)/)?.[1] ?? ''
-})
+const verificationCode = computed(() => extractVerificationCode(selected.value?.content))
+const verificationMessages = computed(() => getVerificationMessages(firstPageMessages.value))
 
 function setAuthenticated(value) {
   authenticated.value = value
   if (!value) {
     overview.value = null
     messages.value = []
+    firstPageMessages.value = []
     page.value = 1
     total.value = 0
     unread.value = 0
@@ -159,6 +159,7 @@ async function loadMessages(targetPage = page.value) {
     if (!authenticated.value || requestId !== inboxRequestId) return
 
     messages.value = data.messages
+    if (data.page === 1) firstPageMessages.value = data.messages
     page.value = data.page
     total.value = data.total
     unread.value = data.unread
@@ -174,7 +175,10 @@ async function loadMessages(targetPage = page.value) {
 
 async function loadActivePage() {
   if (activePage.value === 'overview') {
-    if (!overviewLoading.value) await loadOverview()
+    await Promise.allSettled([
+      force || !overview.value ? loadOverview() : Promise.resolve(),
+      loadMessages(1),
+    ])
     return
   }
   if (!actionLoading.value) await loadMessages(1)
@@ -342,17 +346,17 @@ function copyTextFallback(value) {
   return copied
 }
 
-async function copyVerificationCode() {
-  if (!verificationCode.value) return
+async function copyVerificationCode(code = verificationCode.value) {
+  if (!code) return
 
   try {
     if (navigator.clipboard && window.isSecureContext) {
       try {
-        await navigator.clipboard.writeText(verificationCode.value)
+        await navigator.clipboard.writeText(code)
       } catch {
-        if (!copyTextFallback(verificationCode.value)) throw new Error('Clipboard is unavailable')
+        if (!copyTextFallback(code)) throw new Error('Clipboard is unavailable')
       }
-    } else if (!copyTextFallback(verificationCode.value)) {
+    } else if (!copyTextFallback(code)) {
       throw new Error('Clipboard is unavailable')
     }
     showFeedback('验证码已复制')
@@ -528,6 +532,18 @@ onBeforeUnmount(() => {
       </mdui-card>
 
       <template v-if="activePage === 'overview'">
+        <mdui-card v-if="verificationMessages.length" variant="outlined" class="category-card verification-card">
+          <div class="category-heading"><h2>验证码</h2></div>
+          <div v-for="message in verificationMessages" :key="message.id" class="verification-row">
+            <div class="verification-details">
+              <span class="verification-name">{{ message.name }}</span>
+              <strong class="verification-value">{{ message.code }}</strong>
+            </div>
+            <IconTooltipButton content="复制验证码" variant="tonal" :aria-label="`复制${message.name}的验证码`" @click="copyVerificationCode(message.code)">
+              <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg></mdui-icon>
+            </IconTooltipButton>
+          </div>
+        </mdui-card>
         <OverviewPage :data="overview" />
       </template>
 
@@ -635,7 +651,7 @@ onBeforeUnmount(() => {
         <span slot="headline">{{ senderLabel(selected.sender) }}</span>
         <div class="message-meta">MESSAGE {{ selected.id }} · {{ formatDate(selected.receivedAt) }}</div>
         <p class="message-full">{{ selected.content }}</p>
-        <mdui-button v-if="verificationCode" slot="action" variant="text" @click="copyVerificationCode">
+        <mdui-button v-if="verificationCode" slot="action" variant="text" @click="copyVerificationCode()">
           复制验证码
         </mdui-button>
         <mdui-button slot="action" variant="text" @click="closeMessageDialog">关闭</mdui-button>

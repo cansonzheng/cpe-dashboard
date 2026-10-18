@@ -59,6 +59,11 @@ mdui-navigation-rail { background: rgb(var(--mdui-color-surface-container-low));
 
 .overview { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: 'network' 'traffic' 'device'; gap: 16px; }
 .overview-grid { display: contents; }
+.verification-card { margin-bottom: 16px; }
+.verification-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 20px; }
+.verification-details { min-width: 0; }
+.verification-name { display: block; overflow-wrap: anywhere; color: rgb(var(--mdui-color-on-surface-variant)); font-size: var(--mdui-typescale-body-medium-size); }
+.verification-value { display: block; margin-top: 4px; color: rgb(var(--mdui-color-primary)); font-size: var(--mdui-typescale-headline-medium-size); font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: .08em; }
 .network-card { grid-area: network; }
 .device-card { grid-area: device; }
 .category-card { display: block; min-width: 0; padding: 24px; --shape-corner: var(--mdui-shape-corner-large); }
