@@ -14,6 +14,7 @@ export function extractVerificationCode(content) {
 
 export function getVerificationMessages(messages) {
   return messages.flatMap((message) => {
+    if (message.read !== false) return []
     const code = extractVerificationCode(message.content)
     if (!code) return []
     return [{

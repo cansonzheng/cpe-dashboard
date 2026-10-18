@@ -17,6 +17,7 @@
   "dependencies": {
     "@koa/bodyparser": "^6.1.0",
     "@koa/router": "^15.1.0",
+    "@mdui/icons": "^1.0.4",
     "dotenv": "^17.2.2",
     "koa": "^2.16.1",
     "koa-static": "^5.0.0",

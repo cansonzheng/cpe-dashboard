@@ -4,7 +4,7 @@
 
 ## 当前功能
 
-- 概览：展示运行时间、运营商、信号、内存和月度流量状态
+- 概览：展示运行时间、运营商、信号、频段、频点、PCI、内存和月度流量状态
 - 短信：分页浏览收件箱、标记已读、批量删除和清空
 
 ### 已提取的设备接口
@@ -87,14 +87,14 @@ node server/index.mjs
 
 ## 远程部署
 
-本机需要安装 `sshpass`、`rsync` 和 `ssh`。在 `scripts/deploy.sh` 开头设置服务器主机、用户名、密码、部署目录和容器名称，然后运行：
+本机需要安装 `sshpass`、`rsync` 和 `ssh`，服务器需安装 `docker-compose`。在 `scripts/deploy.sh` 开头设置服务器主机、用户名、密码和部署目录，然后运行：
 
 ```bash
 pnpm build
 pnpm run deploy
 ```
 
-脚本使用 `sshpass` 提供密码，将 `dist` 通过 rsync 上传到服务器的 `/docker/cpe-dashboard/dist`，成功后执行 `docker restart cpe-dashboard`。上传失败时会停止，不会重启容器；部署脚本本身不会自动构建。脚本中的密码初始为占位值，填写真实密码后不要提交到仓库。
+脚本使用 `sshpass` 提供密码，将 `dist` 通过 rsync 上传到服务器的 `DEPLOY_DIRECTORY/dist`，成功后进入 `DEPLOY_DIRECTORY`，依次执行 `docker-compose down` 和 `docker-compose up -d`。该目录需包含 Compose 配置。上传、切换目录或停止服务失败时会停止后续操作；部署脚本本身不会自动构建。脚本中的密码初始为占位值，填写真实密码后不要提交到仓库。
 
 ## Docker Compose
 
@@ -140,7 +140,7 @@ docker run --env-file .env -p 3100:3100 cpe-dashboard
 - `GET /api/auth/session`：查询页面登录状态
 - `POST /api/auth/login`：使用密码登录
 - `POST /api/auth/logout`：退出登录
-- `GET /api/overview`：设备状态与流量概览
+- `GET /api/overview`：设备状态与流量概览；`signal.band`、`signal.channel`、`signal.pci` 分别为当前网络的频段、频点编号和 PCI，缺失时为 `null`。5G 使用设备的 5G 字段，其余网络使用普通网络字段。
 - `GET /api/sms?page=1`：分页短信列表
 - `GET /api/sms/settings`：短信功能配置摘要
 - `POST /api/sms/:id/read`：将单条短信标为已读

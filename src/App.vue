@@ -1,4 +1,18 @@
 <script setup>
+import '@mdui/icons/arrow-back.js'
+import '@mdui/icons/arrow-forward.js'
+import '@mdui/icons/checklist.js'
+import '@mdui/icons/close.js'
+import '@mdui/icons/content-copy.js'
+import '@mdui/icons/dashboard.js'
+import '@mdui/icons/dashboard--outlined.js'
+import '@mdui/icons/delete.js'
+import '@mdui/icons/delete-sweep.js'
+import '@mdui/icons/done-all.js'
+import '@mdui/icons/inbox.js'
+import '@mdui/icons/refresh.js'
+import '@mdui/icons/sms.js'
+import '@mdui/icons/sms--outlined.js'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { confirm as confirmDialog } from 'mdui/functions/confirm.js'
 import { snackbar } from 'mdui/functions/snackbar.js'
@@ -73,6 +87,7 @@ const authLoading = ref(false)
 const selectedIds = ref([])
 const selectionMode = ref(false)
 const actionLoading = ref(false)
+const copyingVerificationId = ref(null)
 const globalLoading = computed(() => (
   authChecking.value || authLoading.value || overviewLoading.value || loading.value || actionLoading.value
 ))
@@ -176,7 +191,7 @@ async function loadMessages(targetPage = page.value) {
 async function loadActivePage() {
   if (activePage.value === 'overview') {
     await Promise.allSettled([
-      force || !overview.value ? loadOverview() : Promise.resolve(),
+      loadOverview(),
       loadMessages(1),
     ])
     return
@@ -361,8 +376,36 @@ async function copyVerificationCode(code = verificationCode.value) {
     }
     showFeedback('验证码已复制')
     closeMessageDialog()
+    return true
   } catch {
     showFeedback('复制失败，请手动复制验证码')
+    return false
+  }
+}
+
+async function copyUnreadVerification(message) {
+  if (globalLoading.value) return
+  actionLoading.value = true
+  copyingVerificationId.value = message.id
+  error.value = ''
+  try {
+    if (!await copyVerificationCode(message.code)) return
+    await postAction(`/api/sms/${message.id}/read`)
+    if (!authenticated.value) return
+    const matchingMessages = new Set([
+      ...firstPageMessages.value,
+      ...messages.value,
+      ...(selected.value ? [selected.value] : []),
+    ].filter((item) => item.id === message.id))
+    const wasUnread = [...matchingMessages].some((item) => !item.read)
+    matchingMessages.forEach((item) => { item.read = true })
+    if (wasUnread) unread.value = Math.max(0, unread.value - 1)
+    writeDataCache()
+  } catch (cause) {
+    if (authenticated.value) error.value = `验证码已复制，标记已读失败：${cause.message}`
+  } finally {
+    copyingVerificationId.value = null
+    actionLoading.value = false
   }
 }
 
@@ -495,7 +538,7 @@ onBeforeUnmount(() => {
       <span class="app-header-spacer" aria-hidden="true"></span>
       <mdui-top-app-bar-title><h1 class="app-header-title">{{ pageTitle }}</h1></mdui-top-app-bar-title>
       <IconTooltipButton content="刷新" placement="bottom-end" aria-label="刷新" :loading="overviewLoading || loading" :disabled="globalLoading" @click="retryActivePage">
-        <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.1A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></mdui-icon>
+        <mdui-icon-refresh class="action-icon" aria-hidden="true"></mdui-icon-refresh>
       </IconTooltipButton>
     </mdui-top-app-bar>
 
@@ -509,13 +552,13 @@ onBeforeUnmount(() => {
     >
       <mdui-navigation-rail-item value="overview">
         概览
-        <mdui-icon slot="icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg></mdui-icon>
-        <mdui-icon slot="active-icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg></mdui-icon>
+        <mdui-icon-dashboard--outlined slot="icon" class="action-icon" aria-hidden="true"></mdui-icon-dashboard--outlined>
+        <mdui-icon-dashboard slot="active-icon" class="action-icon" aria-hidden="true"></mdui-icon-dashboard>
       </mdui-navigation-rail-item>
       <mdui-navigation-rail-item value="sms">
         短信
-        <mdui-icon slot="icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg></mdui-icon>
-        <mdui-icon slot="active-icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg></mdui-icon>
+        <mdui-icon-sms--outlined slot="icon" class="action-icon" aria-hidden="true"></mdui-icon-sms--outlined>
+        <mdui-icon-sms slot="active-icon" class="action-icon" aria-hidden="true"></mdui-icon-sms>
         <mdui-badge v-if="unread" slot="badge">{{ unread > 99 ? '99+' : unread }}</mdui-badge>
       </mdui-navigation-rail-item>
     </mdui-navigation-rail>
@@ -527,11 +570,13 @@ onBeforeUnmount(() => {
         <span>{{ error }}</span>
       </div>
       <IconTooltipButton content="重试" placement="left" class="danger-action" aria-label="重试" @click="retryActivePage">
-        <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.1A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></mdui-icon>
+        <mdui-icon-refresh class="action-icon" aria-hidden="true"></mdui-icon-refresh>
       </IconTooltipButton>
       </mdui-card>
 
       <template v-if="activePage === 'overview'">
+        <OverviewPage :data="overview">
+          <template #after-network>
         <mdui-card v-if="verificationMessages.length" variant="outlined" class="category-card verification-card">
           <div class="category-heading"><h2>验证码</h2></div>
           <div v-for="message in verificationMessages" :key="message.id" class="verification-row">
@@ -539,12 +584,13 @@ onBeforeUnmount(() => {
               <span class="verification-name">{{ message.name }}</span>
               <strong class="verification-value">{{ message.code }}</strong>
             </div>
-            <IconTooltipButton content="复制验证码" variant="tonal" :aria-label="`复制${message.name}的验证码`" @click="copyVerificationCode(message.code)">
-              <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg></mdui-icon>
+            <IconTooltipButton content="复制验证码" variant="tonal" :aria-label="`复制${message.name}的验证码`" :disabled="globalLoading" :loading="copyingVerificationId === message.id" @click="copyUnreadVerification(message)">
+              <mdui-icon-content-copy class="action-icon" aria-hidden="true"></mdui-icon-content-copy>
             </IconTooltipButton>
           </div>
         </mdui-card>
-        <OverviewPage :data="overview" />
+          </template>
+        </OverviewPage>
       </template>
 
       <template v-else>
@@ -557,8 +603,8 @@ onBeforeUnmount(() => {
           :disabled="!selectionMode && messages.length === 0"
           @click="selectionMode ? leaveSelectionMode() : enterSelectionMode()"
         >
-          <mdui-icon v-if="selectionMode"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.41 4.29 19.71 2.88 18.3 9.17 12 2.88 5.7 4.29 4.29 10.59 10.59 16.89 4.29z"/></svg></mdui-icon>
-          <mdui-icon v-else><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 7h-9v2h9V7zm0 8h-9v2h9v-2zM5.54 11 2 7.46l1.41-1.41 2.13 2.13 4.25-4.25 1.41 1.41L5.54 11zm0 8L2 15.46l1.41-1.41 2.13 2.13 4.25-4.25 1.41 1.41L5.54 19z"/></svg></mdui-icon>
+          <mdui-icon-close v-if="selectionMode" class="action-icon" aria-hidden="true"></mdui-icon-close>
+          <mdui-icon-checklist v-else class="action-icon" aria-hidden="true"></mdui-icon-checklist>
         </IconTooltipButton>
         <span class="toolbar-unread">未读 {{ unread }} 条</span>
       </div>
@@ -567,16 +613,16 @@ onBeforeUnmount(() => {
         <template v-if="selectionMode">
           <span class="selection-count">已选 {{ selectedIds.length }} 条</span>
           <IconTooltipButton content="删除所选" placement="top-end" class="danger-action" variant="outlined" aria-label="删除所选" :disabled="actionLoading || selectedIds.length === 0" @click="deleteMessages(selectedIds)">
-            <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm3.46-7.12 1.41-1.41L12 11.59l1.12-1.12 1.41 1.41L13.41 13l1.12 1.12-1.41 1.41L12 14.41l-1.12 1.12-1.41-1.41L10.59 13l-1.13-1.12zM15.5 4l-1-1h-5l-1 1H5v2h14V4z"/></svg></mdui-icon>
+            <mdui-icon-delete class="action-icon" aria-hidden="true"></mdui-icon-delete>
           </IconTooltipButton>
         </template>
 
         <template v-else>
           <IconTooltipButton content="全部标记为已读" variant="tonal" aria-label="全部标记为已读" :disabled="actionLoading || unread === 0" @click="markAllRead">
-            <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m18 7-1.41-1.41-6.34 6.34 1.41 1.41L18 7zm4.24-1.41L11.66 16.17 7.48 12l-1.41 1.41 5.59 5.59L23.66 7l-1.42-1.41zM.41 13.41 6 19l1.41-1.41L1.83 12 .41 13.41z"/></svg></mdui-icon>
+            <mdui-icon-done-all class="action-icon" aria-hidden="true"></mdui-icon-done-all>
           </IconTooltipButton>
           <IconTooltipButton content="清空收件箱" placement="top-end" class="danger-action" variant="outlined" aria-label="清空收件箱" :disabled="actionLoading || total === 0" @click="clearInbox">
-            <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm3-8h6v2H9v-2zm0 4h6v2H9v-2zm6.5-11-1-1h-5l-1 1H5v2h14V4z"/></svg></mdui-icon>
+            <mdui-icon-delete-sweep class="action-icon" aria-hidden="true"></mdui-icon-delete-sweep>
           </IconTooltipButton>
         </template>
       </div>
@@ -622,7 +668,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-if="!loading && !messages.length && !error" class="empty">
-        <span>□</span>
+        <mdui-icon-inbox class="empty-icon" aria-hidden="true"></mdui-icon-inbox>
         <p>收件箱暂无短信</p>
       </div>
     </mdui-card>
@@ -631,10 +677,10 @@ onBeforeUnmount(() => {
       <span>共 {{ total }} 条 · 第 {{ page }} / {{ totalPages }} 页</span>
       <div>
         <IconTooltipButton content="上一页" variant="outlined" aria-label="上一页" :disabled="loading || page <= 1" @click="changePage(-1)">
-          <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></mdui-icon>
+          <mdui-icon-arrow-back class="action-icon" aria-hidden="true"></mdui-icon-arrow-back>
         </IconTooltipButton>
         <IconTooltipButton content="下一页" placement="top-end" variant="filled" aria-label="下一页" :disabled="loading || page >= totalPages" @click="changePage(1)">
-          <mdui-icon><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 4-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8-8-8z"/></svg></mdui-icon>
+          <mdui-icon-arrow-forward class="action-icon" aria-hidden="true"></mdui-icon-arrow-forward>
         </IconTooltipButton>
       </div>
     </footer>
@@ -669,13 +715,13 @@ onBeforeUnmount(() => {
     >
       <mdui-navigation-bar-item value="overview">
         概览
-        <mdui-icon slot="icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg></mdui-icon>
-        <mdui-icon slot="active-icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg></mdui-icon>
+        <mdui-icon-dashboard--outlined slot="icon" class="action-icon" aria-hidden="true"></mdui-icon-dashboard--outlined>
+        <mdui-icon-dashboard slot="active-icon" class="action-icon" aria-hidden="true"></mdui-icon-dashboard>
       </mdui-navigation-bar-item>
       <mdui-navigation-bar-item value="sms">
         短信
-        <mdui-icon slot="icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg></mdui-icon>
-        <mdui-icon slot="active-icon"><svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg></mdui-icon>
+        <mdui-icon-sms--outlined slot="icon" class="action-icon" aria-hidden="true"></mdui-icon-sms--outlined>
+        <mdui-icon-sms slot="active-icon" class="action-icon" aria-hidden="true"></mdui-icon-sms>
         <mdui-badge v-if="unread" slot="badge">{{ unread > 99 ? '99+' : unread }}</mdui-badge>
       </mdui-navigation-bar-item>
     </mdui-navigation-bar>

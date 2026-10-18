@@ -23,7 +23,7 @@ test('normalizeOverview exposes only normalized dashboard fields', () => {
     uptimeSeconds: 1736272,
     operator: 'China Telecom',
     networkType: 'NR5G',
-    signal: { level: 4, connected: true, rsrp: null, rsrq: null, rssi: null, sinr: null },
+    signal: { level: 4, connected: true, band: null, channel: null, pci: null, rsrp: null, rsrq: null, rssi: null, sinr: null },
     memory: {
       totalBytes: 204816384,
       usedBytes: 110186496,
@@ -41,6 +41,36 @@ test('normalizeOverview exposes only normalized dashboard fields', () => {
     },
   })
   assert.equal('moduleImei' in overview, false)
+})
+
+test('normalizeOverview selects 5G radio fields instead of LTE fields', () => {
+  const { signal } = normalizeOverview({ network: {
+    network_type_str: '5G(SA)', currentband_5g: '78', FREQ_5G: '627264', PCI_5G: '160',
+    currentband: '3', FREQ: '1650', PCI: '12',
+  } })
+  assert.equal(signal.band, 'n78')
+  assert.equal(signal.channel, 627264)
+  assert.equal(signal.pci, 160)
+})
+
+test('normalizeOverview selects LTE fields and preserves PCI zero', () => {
+  const { signal } = normalizeOverview({ network: {
+    network_type_str: 'LTE', currentband: '3', FREQ: '1650', PCI: '0',
+    currentband_5g: '78', FREQ_5G: '627264', PCI_5G: '160',
+  } })
+  assert.equal(signal.band, 'B3')
+  assert.equal(signal.channel, 1650)
+  assert.equal(signal.pci, 0)
+})
+
+test('normalizeOverview handles missing or invalid radio values', () => {
+  const { signal } = normalizeOverview({ network: {
+    network_type_str: 'NR5G', currentband_5g: ' ', FREQ_5G: '', PCI_5G: 'unknown',
+  } })
+  assert.equal(signal.band, null)
+  assert.equal(signal.channel, null)
+  assert.equal(signal.pci, null)
+  assert.equal(normalizeOverview({ network: { currentband: 'B1+B3' } }).signal.band, 'B1+B3')
 })
 
 test('normalizeOverview handles disabled or missing traffic limits', () => {

@@ -4,7 +4,6 @@ set -euo pipefail
 DEPLOY_HOST='192.168.20.1'
 DEPLOY_USER='root'
 DEPLOY_PASSWORD='@@@@####....'
-DEPLOY_CONTAINER='cpe-dashboard'
 DEPLOY_DIRECTORY='/docker/cpe-dashboard'
 
 PROJECT_DIRECTORY="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,11 +21,6 @@ if [[ ! -f dist/public/index.html || ! -f dist/server/index.mjs ]]; then
   exit 1
 fi
 
-if [[ ! "$DEPLOY_CONTAINER" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]]; then
-  printf '容器名称无效。\n' >&2
-  exit 1
-fi
-
 export SSHPASS="$DEPLOY_PASSWORD"
 trap 'unset SSHPASS' EXIT
 
@@ -34,8 +28,9 @@ printf '正在上传 dist 到 %s…\n' "$DEPLOY_HOST"
 sshpass -e rsync -av -e 'ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new' \
   dist "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_DIRECTORY}/"
 
-printf '正在重启容器 %s…\n' "$DEPLOY_CONTAINER"
+printf '正在重新创建 %s 中的服务…\n' "$DEPLOY_DIRECTORY"
+REMOTE_DEPLOY_DIRECTORY="${DEPLOY_DIRECTORY//\'/\'\\\'\'}"
 sshpass -e ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
-  "${DEPLOY_USER}@${DEPLOY_HOST}" "docker restart ${DEPLOY_CONTAINER}"
+  "${DEPLOY_USER}@${DEPLOY_HOST}" "cd -- '${REMOTE_DEPLOY_DIRECTORY}' && docker-compose down && docker-compose up -d"
 
 printf '部署完成。\n'

@@ -17,12 +17,22 @@ test('ignores ordinary messages, missing codes, and numbers embedded in phone nu
 
 test('lists matching messages with bracket names or the sender as fallback', () => {
   assert.deepEqual(getVerificationMessages([
-    { id: '1', sender: '10001', content: '【 示例服务 】验证码为012345' },
-    { id: '2', sender: '106123', content: '验证码：9876' },
-    { id: '3', sender: '10000', content: '本月使用1234MB' },
+    { id: '1', read: false, sender: '10001', content: '【 示例服务 】验证码为012345' },
+    { id: '2', read: false, sender: '106123', content: '验证码：9876' },
+    { id: '3', read: false, sender: '10000', content: '本月使用1234MB' },
   ]), [
     { id: '1', name: '示例服务', code: '012345' },
     { id: '2', name: '106123', code: '9876' },
   ])
   assert.deepEqual(getVerificationMessages([]), [])
+})
+
+test('only unread verification messages appear, and disappear once marked as read', () => {
+  const message = { id: '1', read: false, sender: '106123', content: '【服务】验证码：012345' }
+  assert.equal(getVerificationMessages([message]).length, 1)
+  message.read = true
+  assert.deepEqual(getVerificationMessages([message]), [])
+  assert.deepEqual(getVerificationMessages([
+    { id: '2', sender: '106123', content: '验证码：1234' },
+  ]), [])
 })

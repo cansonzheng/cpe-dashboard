@@ -33,6 +33,9 @@ function parseMemory(value) {
 function normalizeOverview({ device = {}, network = {}, traffic = {} }) {
   const uptimeSeconds = toNumber(device.uptime)
   const signalLevel = toNumber(network.signal_lvl)
+  const is5g = /5G|NR/i.test(network.network_type_str || '')
+  const rawBand = is5g ? network.currentband_5g : network.currentband
+  const band = typeof rawBand === 'string' || typeof rawBand === 'number' ? String(rawBand).trim() : ''
   const usedMegabytes = toNumber(traffic.mon_download_flow)
   const limitGigabytes = toNumber(traffic.limitSize)
   const usedGigabytes = usedMegabytes === null ? null : usedMegabytes / 1024
@@ -51,6 +54,9 @@ function normalizeOverview({ device = {}, network = {}, traffic = {} }) {
     signal: {
       level: signalLevel === null ? null : Math.max(0, Math.min(5, signalLevel)),
       connected: network.sim_status === '1' && signalLevel > 0,
+      band: band ? (/^\d+$/.test(band) ? `${is5g ? 'n' : 'B'}${band}` : band) : null,
+      channel: toNumber(is5g ? network.FREQ_5G : network.FREQ),
+      pci: toNumber(is5g ? network.PCI_5G : network.PCI),
       rsrp: toNumber(network.RSRP),
       rsrq: toNumber(network.RSRQ),
       rssi: toNumber(network.RSSI),

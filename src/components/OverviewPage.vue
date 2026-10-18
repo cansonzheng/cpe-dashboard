@@ -1,5 +1,8 @@
 <script setup>
-import { computed } from 'vue'
+import '@mdui/icons/cell-tower.js'
+import '@mdui/icons/dns--outlined.js'
+import '@mdui/icons/expand-more.js'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   data: { type: Object, default: null },
@@ -20,6 +23,7 @@ const networkDescription = computed(() => {
 })
 
 const signalLevel = computed(() => props.data?.signal?.level ?? 0)
+const networkExpanded = ref(false)
 
 function formatDuration(seconds) {
   if (!Number.isFinite(seconds)) return '—'
@@ -46,11 +50,12 @@ function formatGigabytes(value) {
 <template>
   <section class="overview" aria-label="设备概览">
 
-    <div class="overview-grid">
       <mdui-card variant="outlined" class="category-card network-card">
-        <div class="category-heading">
+        <mdui-collapse>
+        <mdui-collapse-item @open="networkExpanded = true" @close="networkExpanded = false">
+        <button slot="header" type="button" class="category-heading network-header" :aria-expanded="networkExpanded" aria-controls="network-details">
           <div class="category-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M12 11c1.66 0 2.99-1.34 2.99-3S13.66 5 12 5 9 6.34 9 8s1.34 3 3 3zm0-8C6.48 3 2 7.48 2 13c0 2.76 1.12 5.26 2.93 7.07l1.42-1.42A7.95 7.95 0 0 1 4 13a8 8 0 0 1 16 0c0 2.21-.9 4.21-2.35 5.65l1.42 1.42A9.97 9.97 0 0 0 22 13c0-5.52-4.48-10-10-10zm0 10c-2.76 0-5 2.24-5 5 0 1.38.56 2.63 1.46 3.54l1.42-1.42A2.99 2.99 0 0 1 9 18a3 3 0 0 1 6 0c0 .83-.34 1.58-.88 2.12l1.42 1.42A4.98 4.98 0 0 0 17 18c0-2.76-2.24-5-5-5z"/></svg>
+            <mdui-icon-cell-tower class="action-icon" aria-hidden="true"></mdui-icon-cell-tower>
           </div>
           <div>
             <h2>移动网络</h2>
@@ -59,41 +64,28 @@ function formatGigabytes(value) {
           <div class="signal-bars" role="img" :aria-label="`信号强度 ${signalLevel} 格`">
             <span v-for="bar in 5" :key="bar" :class="{ active: bar <= signalLevel }"></span>
           </div>
-        </div>
+          <mdui-icon-expand-more class="action-icon network-chevron" :class="{ expanded: networkExpanded }" aria-hidden="true"></mdui-icon-expand-more>
+        </button>
 
-      </mdui-card>
-
-      <mdui-card variant="outlined" class="category-card device-card">
-        <div class="category-heading">
-          <div class="category-icon secondary" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M15 1H9v2h6V1zm-1 13h-4v-4h4v4zm3.03-4.03 1.42-1.42A8.96 8.96 0 0 0 13 5.07V3h-2v2.07A9 9 0 1 0 20.93 15H23v-2h-2.07a8.97 8.97 0 0 0-3.9-3.03zM12 21a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"/></svg>
-          </div>
-          <div>
-            <h2>设备状态</h2>
-            <p>运行与资源使用情况</p>
-          </div>
-        </div>
-
-        <div class="category-content device-content">
+        <div id="network-details" class="category-content network-content" role="region" aria-label="移动网络详情">
           <div class="info-item">
-            <span class="metric-label">运行时间</span>
-            <strong>{{ formatDuration(data?.uptimeSeconds) }}</strong>
-            <small>自设备上次启动</small>
+            <span class="metric-label">频段</span>
+            <strong>{{ data?.signal?.band || '—' }}</strong>
           </div>
-          <div class="info-item memory-info">
-            <span class="metric-label">内存状态</span>
-            <strong>{{ data?.memory?.usedPercent ?? '—' }}<template v-if="data?.memory?.usedPercent != null">%</template></strong>
-            <small>已用 {{ formatBytes(data?.memory?.usedBytes) }} / 共 {{ formatBytes(data?.memory?.totalBytes) }}</small>
-            <mdui-linear-progress
-              v-if="data?.memory?.usedPercent != null"
-              :value="data.memory.usedPercent"
-              max="100"
-              aria-label="内存使用率"
-            ></mdui-linear-progress>
+          <div class="info-item">
+            <span class="metric-label">频点</span>
+            <strong>{{ data?.signal?.channel ?? '—' }}</strong>
+          </div>
+          <div class="info-item">
+            <span class="metric-label">PCI</span>
+            <strong>{{ data?.signal?.pci ?? '—' }}</strong>
           </div>
         </div>
+        </mdui-collapse-item>
+        </mdui-collapse>
       </mdui-card>
-    </div>
+
+      <slot name="after-network"></slot>
 
     <mdui-card variant="outlined" class="traffic-card">
       <div class="traffic-heading">
@@ -125,5 +117,36 @@ function formatGigabytes(value) {
         </div>
       </div>
     </mdui-card>
+
+      <mdui-card variant="outlined" class="category-card device-card">
+        <div class="category-heading">
+          <div class="category-icon secondary" aria-hidden="true">
+            <mdui-icon-dns--outlined class="action-icon" aria-hidden="true"></mdui-icon-dns--outlined>
+          </div>
+          <div>
+            <h2>设备状态</h2>
+            <p>运行与资源使用情况</p>
+          </div>
+        </div>
+
+        <div class="category-content device-content">
+          <div class="info-item">
+            <span class="metric-label">运行时间</span>
+            <strong>{{ formatDuration(data?.uptimeSeconds) }}</strong>
+            <small>自设备上次启动</small>
+          </div>
+          <div class="info-item memory-info">
+            <span class="metric-label">内存状态</span>
+            <strong>{{ data?.memory?.usedPercent ?? '—' }}<template v-if="data?.memory?.usedPercent != null">%</template></strong>
+            <small>已用 {{ formatBytes(data?.memory?.usedBytes) }} / 共 {{ formatBytes(data?.memory?.totalBytes) }}</small>
+            <mdui-linear-progress
+              v-if="data?.memory?.usedPercent != null"
+              :value="data.memory.usedPercent"
+              max="100"
+              aria-label="内存使用率"
+            ></mdui-linear-progress>
+          </div>
+        </div>
+      </mdui-card>
   </section>
 </template>
